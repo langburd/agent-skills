@@ -1,0 +1,15 @@
+{
+  "name": "langburd",
+  "owner": {
+    "name": "langburd"
+  },
+  "description": "Personal Claude Code marketplace",
+  "plugins": [
+    {
+      "name": "hello-world",
+      "source": "./plugins/hello-world",
+      "description": "Example starter skill — replace with your own",
+      "version": "1.0.0"
+    }
+  ]
+}

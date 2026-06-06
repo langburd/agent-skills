@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "f=$(jq -r '.tool_input.file_path'); echo \"$f\" | grep -q 'plugins/' && \"$(git rev-parse --show-toplevel)/scripts/sync.sh\" || true",
+            "statusMessage": "Syncing marketplace index...",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "Write|Edit"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "\"$(git rev-parse --show-toplevel)/scripts/sync.sh\" --check || true",
+            "timeout": 30,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
