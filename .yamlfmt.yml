@@ -1,0 +1,14 @@
+---
+# https://github.com/google/yamlfmt/blob/main/docs/config-file.md
+include:
+  - "**/*.yaml"
+  - "**/*.yml"
+formatter:
+  eof_newline: true
+  force_array_style: block
+  include_document_start: true
+  max_line_length: 90
+  retain_line_breaks_single: true
+  trim_trailing_whitespace: true
+  type: basic
+match_type: doublestar

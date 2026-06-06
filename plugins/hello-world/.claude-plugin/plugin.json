@@ -1,5 +1,5 @@
 {
+  "description": "Example starter skill — replace with your own",
   "name": "hello-world",
-  "version": "1.0.0",
-  "description": "Example starter skill \u2014 replace with your own"
+  "version": "1.0.0"
 }

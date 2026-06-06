@@ -82,7 +82,7 @@ Installed (`pre-commit install` already run). Every commit runs:
 
 - JSON: `check-json` + `pretty-format-json` (2-space, no key sort)
 - Bash: `shellcheck --severity=warning` + `shfmt -i 2 -ci -bn`
-- Markdown: `markdownlint --fix` (config: `.markdownlint.json` — MD013/MD033/MD040 disabled)
+- Markdown: `markdownlint --fix` (config: `.markdownlint.json` — MD013/MD033/MD040/MD060 disabled)
 - YAML: `check-yaml`
 - Local `sync` hook: runs `sync.sh` (catches forgotten regeneration)
 

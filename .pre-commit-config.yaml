@@ -1,33 +1,104 @@
+---
+default_stages:
+  - pre-commit
+fail_fast: false
+minimum_pre_commit_version: 2.15.0
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
     hooks:
-      - id: check-json
-      - id: pretty-format-json
-        args: [--autofix, --indent=2, --no-sort-keys]
+      # Git hooks
+      - id: check-added-large-files
+        args:
+          - --maxkb=2000
+      - id: check-merge-conflict
+      - id: check-vcs-permalinks
+      - id: forbid-submodules
+      - id: no-commit-to-branch
+        args:
+          - --branch
+          - main
+
+      # Common errors
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-symlinks
       - id: check-yaml
       - id: end-of-file-fixer
+      - id: fix-byte-order-marker
       - id: trailing-whitespace
-      - id: check-merge-conflict
+        args:
+          - "--markdown-linebreak-ext=md,markdown,mdown,mkd"
+
+      # JSON
+      - id: check-json
+      - id: pretty-format-json
+        args:
+          - --autofix
+          - --indent=2
+          - --no-ensure-ascii
+          - --no-sort-keys
+
+      # Cross platform
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: destroyed-symlinks
+      - id: mixed-line-ending
+        args:
+          - --fix=lf
+
+      # Security
+      - id: detect-aws-credentials
+        args:
+          - --allow-missing-credentials
       - id: detect-private-key
 
+  # Markdown
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.44.0
+    rev: e72a3ca1632f0b11a07d171449fe447a7ff6795e # v0.48.0
     hooks:
       - id: markdownlint
-        args: [--fix]
+        args:
+          - --fix
 
+  # Shell
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: 745eface02aef23e168a8afb6b5737818efbea95 # v0.11.0.1
     hooks:
       - id: shellcheck
-        args: [--severity=warning]
+        args:
+          - --severity=warning
 
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.12.0-2
+    rev: 05c1426671b9237fb5e1444dd63aa5731bec0dfb # v3.13.1-1
     hooks:
       - id: shfmt
-        args: [-i, "2", -ci, -bn]
+        args:
+          - -i
+          - "2"
+          - -ci
+          - -bn
+
+  # Gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 6eaad039603a4de39fddd1cf5f727391efe9974e # v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # YAML
+  - repo: https://github.com/google/yamlfmt
+    rev: 42486acb2b9ef7aa4850b754d933989bca887349 # v0.20.0
+    hooks:
+      - id: yamlfmt
+        exclude: ^\.pre-commit-config\.yaml$
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: 79a6b2b1392eaf49cdd32ac4f14be1a809bbd8f7 # v1.37.1
+    hooks:
+      - id: yamllint
+        args:
+          - -c=.yamllint.yml
 
   - repo: local
     hooks:

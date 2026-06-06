@@ -2,24 +2,24 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
-            "type": "command",
             "command": "f=$(jq -r '.tool_input.file_path'); echo \"$f\" | grep -q 'plugins/' && ./scripts/sync.sh 2>/dev/null || true",
+            "statusMessage": "Syncing marketplace index...",
             "timeout": 30,
-            "statusMessage": "Syncing marketplace index..."
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "Write|Edit"
       }
     ],
     "Stop": [
       {
         "hooks": [
           {
-            "type": "command",
             "command": "./scripts/sync.sh --check 2>/dev/null || true",
-            "timeout": 30
+            "timeout": 30,
+            "type": "command"
           }
         ]
       }
