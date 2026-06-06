@@ -1,7 +1,7 @@
 # langburd/claude-plugins
 
 Personal Claude Code plugin marketplace.
-Skills-first, versioned with semver, auto-updating on session start.
+Skills-first, versioned with semver, auto-updating via native marketplace autoUpdate.
 
 ## Install
 
