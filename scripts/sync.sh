@@ -193,7 +193,6 @@ if [[ ${CHECK_MODE} -eq 1 ]]; then
   fi
 
   drift=0
-  mkdir -p "${REPO_ROOT}/.claude-plugin"
   if ! diff -q "${tmp_marketplace}" "${MARKETPLACE_JSON}" >/dev/null 2>&1; then
     echo "DRIFT: .claude-plugin/marketplace.json is out of sync"
     diff "${MARKETPLACE_JSON}" "${tmp_marketplace}" || true
