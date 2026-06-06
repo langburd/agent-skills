@@ -12,22 +12,13 @@ on:
       - ".claude/**"
   push:
     branches:
-      - main
+      - "!main"
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Run sync.sh --check
         run: ./scripts/sync.sh --check
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Install pre-commit
-        run: pip install pre-commit
       - name: Run pre-commit
-        run: pre-commit run --all-files
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
