@@ -13,26 +13,30 @@ claude plugin marketplace add langburd/claude-plugins
 claude plugin install hello-world@langburd
 ```
 
-## Auto-Update (Session Start)
+## Auto-Update
 
-Add to `~/.claude/settings.json` hooks:
+Claude Code can auto-apply newer plugin versions at startup by comparing
+installed versions against this marketplace's index. Third-party marketplaces
+have auto-update disabled by default — enable it in `~/.claude/settings.json`:
 
 ```json
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude plugin marketplace update langburd"
-          }
-        ]
-      }
-    ]
+  "extraKnownMarketplaces": {
+    "langburd": {
+      "source": {
+        "source": "github",
+        "repo": "langburd/claude-plugins"
+      },
+      "autoUpdate": true
+    }
   }
 }
 ```
+
+`claude plugin marketplace add langburd/claude-plugins` registers the entry; set
+`"autoUpdate": true` on it (or toggle via `/plugin` → Marketplaces). No
+SessionStart hook is needed — version comparison and update application are
+built into Claude Code.
 
 ## Plugins
 
