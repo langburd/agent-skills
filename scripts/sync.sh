@@ -44,6 +44,12 @@ for plugin_dir in "${REPO_ROOT}/plugins"/*/; do
     FAILED=1
   fi
 
+  desc_val="$(jq -r '.description // empty' "${plugin_json}")"
+  if [[ -z "${desc_val}" ]]; then
+    echo "${plugin_json}: ERROR: missing 'description' field"
+    FAILED=1
+  fi
+
   if [[ -n "${name}" && "${name}" != "${plugin_name}" ]]; then
     echo "${plugin_json}: ERROR: name '${name}' does not match directory '${plugin_name}'"
     FAILED=1
@@ -155,6 +161,7 @@ build_table_file() {
     pname="$(basename "${plugin_dir}")"
     ver="$(jq -r '.version // ""' "${plugin_dir}.claude-plugin/plugin.json")"
     desc="$(jq -r '.description // ""' "${plugin_dir}.claude-plugin/plugin.json")"
+    desc="${desc//|/\\|}"
     printf '| [%s](plugins/%s) | %s | %s |\n' "${pname}" "${pname}" "${ver}" "${desc}" >>"${out}"
   done
   printf '<!-- END PLUGIN TABLE -->\n' >>"${out}"
