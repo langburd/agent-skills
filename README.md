@@ -5,12 +5,21 @@ Skills-first, versioned with semver, auto-updating via native marketplace autoUp
 
 ## Install
 
+### Terminal (CLI)
+
 ```bash
 # Register marketplace
 claude plugin marketplace add langburd/claude-plugins
 
 # Install a plugin
 claude plugin install hello-world@langburd
+```
+
+### Claude Code slash commands
+
+```
+/plugin marketplace add langburd/claude-plugins
+/plugin install hello-world@langburd
 ```
 
 ## Auto-Update
