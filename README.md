@@ -8,10 +8,7 @@ Skills-first, versioned with semver, auto-updating via native marketplace autoUp
 ### Terminal (CLI)
 
 ```bash
-# Register marketplace
 claude plugin marketplace add langburd/agent-skills
-
-# Install a plugin
 claude plugin install hello-world@langburd
 ```
 
@@ -52,6 +49,7 @@ built into Claude Code.
 <!-- BEGIN PLUGIN TABLE -->
 | Plugin | Version | Description |
 |--------|---------|-------------|
+| [cv-achievements](plugins/cv-achievements) | 1.0.0 | Turn GitHub PR activity into CV achievement bullets for a job entry |
 | [hello-world](plugins/hello-world) | 1.0.0 | Example starter skill — replace with your own |
 <!-- END PLUGIN TABLE -->
 

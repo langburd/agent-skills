@@ -1,0 +1,5 @@
+{
+  "description": "Turn GitHub PR activity into CV achievement bullets for a job entry",
+  "name": "cv-achievements",
+  "version": "1.0.0"
+}
