@@ -25,6 +25,21 @@ claude plugin install <plugin>@langburd
 
 After any plugin edit, run `./scripts/sync.sh` to propagate changes.
 
+## Plugin READMEs
+
+Every `plugins/<name>/README.md` must include an **Installation** section at
+the top (after the title) with the two-command install snippet:
+
+```markdown
+## Installation
+
+```bash
+claude plugin marketplace add langburd/agent-skills
+claude plugin install <bundle-name>@langburd
+```
+
+```
+
 ## Workflow: Adding or Editing a Plugin
 
 1. Edit skill content in `plugins/<name>/skills/<skill-name>/SKILL.md`
