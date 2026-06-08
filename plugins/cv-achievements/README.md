@@ -1,5 +1,12 @@
 # cv-achievements
 
+## Installation
+
+```bash
+claude plugin marketplace add langburd/agent-skills
+claude plugin install cv-achievements@langburd
+```
+
 Generate CV achievement bullets for a job entry from your real GitHub PR
 activity. Reusable for any GitHub user, any org, and any job.
 
