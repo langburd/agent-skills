@@ -5,12 +5,12 @@ with code in this repository.
 
 ## What This Repo Is
 
-Public Claude Code plugin marketplace (`langburd/claude-plugins`). Hosts
+Public Claude Code plugin marketplace (`langburd/agent-skills`). Hosts
 versioned plugin bundles — each bundle may carry skills, agents, commands,
 and MCP config. Consumers install via:
 
 ```bash
-claude plugin marketplace add langburd/claude-plugins
+claude plugin marketplace add langburd/agent-skills
 claude plugin install <plugin>@langburd
 ```
 
@@ -109,6 +109,6 @@ Only edit `version` in `plugin.json` — `sync.sh` propagates it everywhere:
 Run before declaring a plugin done:
 
 ```bash
-claude plugin marketplace add /absolute/path/to/claude-plugins
+claude plugin marketplace add /absolute/path/to/agent-skills
 claude plugin install <bundle>@langburd
 ```

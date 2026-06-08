@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-claude plugin marketplace add langburd/claude-plugins
+claude plugin marketplace add langburd/agent-skills
 claude plugin install hello-world@langburd
 ```
 

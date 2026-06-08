@@ -42,6 +42,6 @@ Validate a plugin bundle (or the whole marketplace). Usage: `/validate-plugin [p
    remind the user to run the end-to-end install test:
 
    ```bash
-   claude plugin marketplace add /absolute/path/to/claude-plugins
+   claude plugin marketplace add /absolute/path/to/agent-skills
    claude plugin install <plugin-name>@langburd
    ```
