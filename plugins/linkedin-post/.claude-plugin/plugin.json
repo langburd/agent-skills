@@ -1,0 +1,5 @@
+{
+  "description": "Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt",
+  "name": "linkedin-post",
+  "version": "0.1.0"
+}

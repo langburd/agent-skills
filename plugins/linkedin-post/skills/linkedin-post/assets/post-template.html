@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{POST_TITLE}} — LinkedIn post</title>
+<style>
+  :root {
+    --bg: #f3f2ef;          /* LinkedIn feed grey */
+    --card: #ffffff;
+    --ink: #1d2226;
+    --muted: #56687a;
+    --accent: #0a66c2;      /* LinkedIn blue */
+    --ok: #057642;
+    --border: #e0dfdc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    padding: 32px 16px;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  .toolbar {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 16px; align-items: center;
+  }
+  button {
+    font: inherit; font-weight: 600;
+    border: 1px solid var(--accent);
+    background: var(--accent); color: #fff;
+    padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    transition: background .15s, transform .05s;
+  }
+  button.secondary { background: #fff; color: var(--accent); }
+  button:hover { filter: brightness(1.05); }
+  button:active { transform: translateY(1px); }
+  button.copied { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .hint { color: var(--muted); font-size: 13px; flex-basis: 100%; margin-top: 4px; }
+  .hint code { background: #eef0f2; padding: 1px 5px; border-radius: 4px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .author { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: linear-gradient(135deg, #0a66c2, #378fe9);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 18px;
+  }
+  .author .name { font-weight: 600; }
+  .author .sub { color: var(--muted); font-size: 13px; }
+  /* the post body: preserve the exact line breaks LinkedIn will see */
+  #post, #comment {
+    white-space: pre-wrap;
+    font-size: 15px;
+    word-wrap: break-word;
+  }
+  #post b { font-weight: 700; }
+  .tags { color: var(--accent); }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <button id="btn-plain" onclick="copyPlain(this)">📋 Copy plain text</button>
+    <button id="btn-bold" class="secondary" onclick="copyBold(this)">𝗕 Copy with Unicode bold</button>
+    <p class="hint">
+      LinkedIn strips HTML — it accepts plain text only. <b>Plain text</b> = clean &amp; accessible.
+      <b>Unicode bold</b> = fake-bold via math glyphs (𝗹𝗶𝗸𝗲 𝘁𝗵𝗶𝘀) that survive paste, but read poorly in screen-readers. Pick at paste time.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="author">
+      <div class="avatar">{{AVATAR_INITIALS}}</div>
+      <div>
+        <div class="name">{{AUTHOR_NAME}}</div>
+        <div class="sub">Preview · now · 🌐</div>
+      </div>
+    </div>
+    <!-- The single source of truth. Wrap phrases to bolden (for the Unicode-bold copy) in <b>…</b>.
+         Put hashtags in the trailing <span class="tags">…</span> so they stay plain in both copies. -->
+    <div id="post">{{POST_BODY}}</div>
+  </div>
+
+  <div class="toolbar" style="margin-top:24px;">
+    <button id="btn-comment" onclick="copyComment(this)">📋 Copy first comment</button>
+    <p class="hint">Post this as the <b>first comment</b> right after publishing — keeps any external link out of the post body (better reach), still one tap away for readers.</p>
+  </div>
+
+  <div class="card">
+    <div class="author">
+      <div class="avatar">{{AVATAR_INITIALS}}</div>
+      <div>
+        <div class="name">{{AUTHOR_NAME}}</div>
+        <div class="sub">First comment · 🌐</div>
+      </div>
+    </div>
+    <div id="comment">{{FIRST_COMMENT}}</div>
+  </div>
+
+  <footer>Rendered preview only. The copy buttons output what LinkedIn actually receives.</footer>
+</div>
+
+<script>
+// --- Plain text: strip tags, collapse to the raw text LinkedIn sees ---
+function plainText() {
+  const node = document.getElementById('post').cloneNode(true);
+  return node.textContent.replace(/ /g, ' ').trim();
+}
+
+// --- Unicode bold: map A-Z a-z 0-9 to Mathematical Sans-Serif Bold ---
+function toBold(str) {
+  let out = '';
+  for (const ch of str) {
+    const c = ch.codePointAt(0);
+    if (c >= 65 && c <= 90)        out += String.fromCodePoint(0x1D5D4 + (c - 65)); // A-Z
+    else if (c >= 97 && c <= 122)  out += String.fromCodePoint(0x1D5EE + (c - 97)); // a-z
+    else if (c >= 48 && c <= 57)   out += String.fromCodePoint(0x1D7EC + (c - 48)); // 0-9
+    else                           out += ch;
+  }
+  return out;
+}
+
+// Bold version: bolden only the <b> phrases, leave the rest plain.
+function boldText() {
+  const root = document.getElementById('post');
+  let out = '';
+  root.childNodes.forEach(n => {
+    if (n.nodeType === Node.TEXT_NODE) out += n.textContent;
+    else if (n.nodeName === 'B')       out += toBold(n.textContent);
+    else                               out += n.textContent; // spans (tags) stay plain
+  });
+  return out.replace(/ /g, ' ').trim();
+}
+
+function flash(btn, label) {
+  const orig = btn.textContent;
+  btn.textContent = label; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+}
+
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    flash(btn, '✓ Copied!');
+  } catch (e) {
+    // Fallback for file:// where clipboard API may be blocked
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    flash(btn, '✓ Copied!');
+  }
+}
+
+function copyPlain(btn) { copyText(plainText(), btn); }
+function copyBold(btn)  { copyText(boldText(),  btn); }
+
+function copyComment(btn) {
+  const text = document.getElementById('comment').textContent.replace(/ /g, ' ').trim();
+  copyText(text, btn);
+}
+</script>
+</body>
+</html>

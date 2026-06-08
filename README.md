@@ -50,6 +50,7 @@ built into Claude Code.
 | Plugin | Version | Description |
 |--------|---------|-------------|
 | [cv-achievements](plugins/cv-achievements) | 1.1.0 | Turn GitHub PR activity into CV achievement bullets for a job entry |
+| [linkedin-post](plugins/linkedin-post) | 0.1.0 | Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt |
 <!-- END PLUGIN TABLE -->
 
 ## Contributing

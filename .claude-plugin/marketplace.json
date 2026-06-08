@@ -10,6 +10,12 @@
       "source": "./plugins/cv-achievements",
       "description": "Turn GitHub PR activity into CV achievement bullets for a job entry",
       "version": "1.1.0"
+    },
+    {
+      "name": "linkedin-post",
+      "source": "./plugins/linkedin-post",
+      "description": "Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt",
+      "version": "0.1.0"
     }
   ]
 }
