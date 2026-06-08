@@ -13,7 +13,7 @@ a timestamped `results-<stamp>.md` beside the input.
 
 ## Input contract
 
-The user supplies a path produced by `fetch-prs.sh` — either ONE JSON file or the
+The user may supply a path produced by `fetch-prs.sh` — either ONE JSON file or the
 `<out>/<org>/<author>/` **directory** that holds `prs-authored.json` and/or
 `prs-reviewed.json`. Its shape:
 
@@ -50,7 +50,9 @@ reasons so the user can judge.
 
 This skill can now fetch its own data. The bundled `fetch-prs.sh` lives beside
 this file; reference it as `"$CLAUDE_SKILL_DIR/fetch-prs.sh"` so it resolves
-regardless of the current working directory or where the plugin is installed.
+regardless of the current working directory or where the plugin is installed
+(`$CLAUDE_SKILL_DIR` is injected by the Claude Code harness at skill invocation
+time and points to the directory containing this SKILL.md file).
 
 **Path A — the user gave an explicit path** (a JSON file or a
 `<out>/<org>/<author>/` directory): use it as-is and skip fetching. This
@@ -86,9 +88,9 @@ preserves the original input contract.
    STOP with the exact fix if any is missing (never auto-install):
 
    ```bash
-   command -v gh   >/dev/null || echo "Install GitHub CLI: https://cli.github.com"
-   gh auth status  >/dev/null 2>&1 || echo "Authenticate: run  gh auth login"
-   command -v jq   >/dev/null || echo "Install jq: https://jqlang.github.io/jq/"
+   command -v gh   >/dev/null || { echo "Install GitHub CLI: https://cli.github.com"; exit 1; }
+   gh auth status  >/dev/null 2>&1 || { echo "Authenticate: run  gh auth login"; exit 1; }
+   command -v jq   >/dev/null || { echo "Install jq: https://jqlang.github.io/jq/"; exit 1; }
    ```
 
    If any check fails, report the matching fix and stop — do not run the script.
