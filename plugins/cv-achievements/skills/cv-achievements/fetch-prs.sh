@@ -195,7 +195,7 @@ fetch_search() {
       after_arg=(-F "after=${cursor}")
     fi
     if ! resp=$(gh api graphql -f query="${gql}" -f q="${query}" \
-                  "${after_arg[@]}" 2>"${errfile}"); then
+                  "${after_arg[@]+"${after_arg[@]}"}" 2>"${errfile}"); then
       if grep -qiE 'rate limit|secondary' "${errfile}"; then
         if (( ++retries > MAX_RETRIES )); then
           echo "Error: gave up after ${MAX_RETRIES} rate-limit retries; try again later." >&2

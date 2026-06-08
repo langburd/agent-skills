@@ -1,6 +1,6 @@
 ---
 name: cv-achievements
-description: Use when turning GitHub PR-activity JSON (produced by fetch-prs.sh) into CV achievement bullets for a job entry. Given a directory it processes both authored and reviewed PRs in one pass, prints the bullets, and saves them to results.md beside the input. Does not fetch from GitHub and does not edit the CV itself.
+description: Use when turning a GitHub user's PR activity into CV achievement bullets for a job entry. If given no data path, it fetches the PRs itself via the bundled fetch-prs.sh (needs gh + jq); if given a JSON file or directory it analyzes that instead. Processes both authored and reviewed PRs in one pass, prints the bullets, and saves them to a timestamped results file beside the data. Does not edit the CV itself.
 ---
 
 # CV Achievements
@@ -9,11 +9,11 @@ Turn PR-activity JSON into a handful of CV achievement bullets (3–6 for most
 roles, up to 7 for a long multi-year tenure with many distinct themes, scaled to
 the role) for one job entry. Given a directory, this means the authored PRs plus
 one reviewed-voice collaboration bullet — one combined list, printed and saved to
-`results.md` beside the input.
+a timestamped `results-<stamp>.md` beside the input.
 
 ## Input contract
 
-The user supplies a path produced by `fetch-prs.sh` — either ONE JSON file or the
+The user may supply a path produced by `fetch-prs.sh` — either ONE JSON file or the
 `<out>/<org>/<author>/` **directory** that holds `prs-authored.json` and/or
 `prs-reviewed.json`. Its shape:
 
@@ -24,8 +24,8 @@ The user supplies a path produced by `fetch-prs.sh` — either ONE JSON file or 
   "pr_count": 0, "prs": [ ... ] }
 ```
 
-This skill NEVER calls GitHub. If no path is supplied, ask for one and tell the
-user to run `fetch-prs.sh --author <user> --org <org>` first.
+When given a path, this skill analyzes existing data without fetching. When no
+path is given, see Step 0 — it fetches the data for you via the bundled script.
 
 **If the path is a directory** (or both files exist): process **both** files in
 one pass. `prs-authored.json` is the spine — ownership voice is the stronger CV
@@ -45,6 +45,72 @@ reasons so the user can judge.
 |---|---|---|
 | `file list truncated at 100 files` / `commit list truncated` | **Low** — `pr_count`, titles, labels intact; theme detection unaffected. Only the few huge PRs understate breadth. | One line: those N PRs are large; breadth is slightly undercounted. Proceed. |
 | result cap / search-window / query truncation (whole PRs missing) | **High** — the dataset is genuinely partial. | Tell the user up front, suggest a narrower re-fetch before trusting counts; don't present bullets as a full account. |
+
+## Step 0 — Acquire data
+
+This skill can now fetch its own data. The bundled `fetch-prs.sh` lives beside
+this file; reference it as `"$CLAUDE_SKILL_DIR/fetch-prs.sh"` so it resolves
+regardless of the current working directory or where the plugin is installed
+(`$CLAUDE_SKILL_DIR` is injected by the Claude Code harness at skill invocation
+time and points to the directory containing this SKILL.md file).
+
+**Path A — the user gave an explicit path** (a JSON file or a
+`<out>/<org>/<author>/` directory): use it as-is and skip fetching. This
+preserves the original input contract.
+
+**Path B — no path was given:** acquire the data, then proceed.
+
+1. Gather inputs:
+   - `--author` (GitHub username) — required, ask if missing.
+   - `--org` (GitHub org/owner) — required, ask if missing.
+   - Mode defaults to BOTH datasets (omit `--mode`). Output dir defaults to
+     `.cv-data` (relative to the current working directory).
+
+2. Resolve and show the target directory: `./.cv-data/<org>/<author>/`. Print the
+   absolute path it resolves to (run `pwd` if needed) so the user sees exactly
+   where data will be written — their workspace, never the plugin cache. Let them
+   override the location before any write.
+
+3. Probe existing data **per file** in that directory — check
+   `prs-authored.json` and `prs-reviewed.json` independently:
+   - **Neither present** → both will be fetched.
+   - **A file is present** → read its `generated_at` and report the age
+     (e.g. "authored: fetched 12 days ago"). Read its `incomplete` flag; if
+     `true`, also report `incomplete_reasons` so the user can judge.
+   - **Only one present** → offer to fetch just the missing one.
+
+   Then ask the user how to proceed: **reuse as-is** / **re-fetch (overwrite)** /
+   **fetch only the missing dataset**. Suggest a default from age and the
+   `incomplete` flag — stale (e.g. weeks old) or incomplete data leans toward
+   re-fetch; fresh complete data leans toward reuse.
+
+4. **Preflight — only if a fetch will actually run.** Verify prerequisites and
+   STOP with the exact fix if any is missing (never auto-install):
+
+   ```bash
+   command -v gh   >/dev/null || { echo "Install GitHub CLI: https://cli.github.com"; exit 1; }
+   gh auth status  >/dev/null 2>&1 || { echo "Authenticate: run  gh auth login"; exit 1; }
+   command -v jq   >/dev/null || { echo "Install jq: https://jqlang.github.io/jq/"; exit 1; }
+   ```
+
+   If any check fails, report the matching fix and stop — do not run the script.
+
+5. Run the script for whichever datasets need fetching:
+
+   ```bash
+   # Fetch both (default):
+   bash "$CLAUDE_SKILL_DIR/fetch-prs.sh" --author <a> --org <o> --out .cv-data
+
+   # Fetch only the missing one:
+   bash "$CLAUDE_SKILL_DIR/fetch-prs.sh" --author <a> --org <o> --mode authored-all --out .cv-data
+   bash "$CLAUDE_SKILL_DIR/fetch-prs.sh" --author <a> --org <o> --mode reviewed     --out .cv-data
+   ```
+
+   Re-fetch is a clean overwrite — the script recreates each dataset file in full,
+   so no merge handling is needed.
+
+6. Hand the resulting `./.cv-data/<org>/<author>/` directory to Step 1 and
+   continue exactly as for a user-supplied directory.
 
 ## Step 1 — Read mode, pick voice
 

@@ -9,7 +9,7 @@
       "name": "cv-achievements",
       "source": "./plugins/cv-achievements",
       "description": "Turn GitHub PR activity into CV achievement bullets for a job entry",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ]
 }
