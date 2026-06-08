@@ -30,6 +30,12 @@
       "version": "0.1.0"
     },
     {
+      "name": "meta-reflection",
+      "source": "./plugins/meta-reflection",
+      "description": "Self-reflection & session-history skills: reflection, reflection-global, session-history",
+      "version": "0.1.0"
+    },
+    {
       "name": "pr-workflow",
       "source": "./plugins/pr-workflow",
       "description": "PR/MR workflow helpers: fix, address-pr-comments, pr-mr-comment-update",

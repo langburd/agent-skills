@@ -53,6 +53,7 @@ built into Claude Code.
 | [cv-achievements](plugins/cv-achievements) | 1.1.0 | Turn GitHub PR activity into CV achievement bullets for a job entry |
 | [humanizer](plugins/humanizer) | 0.1.0 | Rewrite AI-sounding text into natural human prose — strip filler, hedging, and robotic phrasing |
 | [linkedin-post](plugins/linkedin-post) | 0.1.0 | Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt |
+| [meta-reflection](plugins/meta-reflection) | 0.1.0 | Self-reflection & session-history skills: reflection, reflection-global, session-history |
 | [pr-workflow](plugins/pr-workflow) | 0.1.0 | PR/MR workflow helpers: fix, address-pr-comments, pr-mr-comment-update |
 | [work-activity-report](plugins/work-activity-report) | 0.1.0 | Generate a work-activity report from your recent Git/PR/Jira activity |
 <!-- END PLUGIN TABLE -->
