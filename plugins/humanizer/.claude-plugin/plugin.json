@@ -1,0 +1,5 @@
+{
+  "description": "Rewrite AI-sounding text into natural human prose — strip filler, hedging, and robotic phrasing",
+  "name": "humanizer",
+  "version": "0.1.0"
+}
