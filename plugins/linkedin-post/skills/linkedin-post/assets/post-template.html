@@ -154,7 +154,7 @@ async function copyText(text, btn) {
     // Fallback for file:// where clipboard API may be blocked
     const ta = document.createElement('textarea');
     ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); ta.remove();
+    document.execCommand('copy'); ta.remove(); // execCommand deprecated but only clipboard path on file:// in some browsers
     flash(btn, '✓ Copied!');
   }
 }

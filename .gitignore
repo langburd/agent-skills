@@ -5,3 +5,8 @@
 .idea/
 .vscode/
 docs/superpowers/
+
+# linkedin-post skill outputs
+linkedin-post.html
+linkedin-post.md
+linkedin-image-prompt.md

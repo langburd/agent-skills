@@ -38,6 +38,3 @@ LinkedIn realities for you:
 | `skills/linkedin-post/SKILL.md` | The workflow: research → write → fill HTML → write image prompt. |
 | `skills/linkedin-post/assets/post-template.html` | The HTML preview template (copy-button engine). |
 | `skills/linkedin-post/references/image-prompt-guide.md` | How to write the image prompt. |
-
-There's a worked example in this repo at `plugins/cv-achievements/linkedin-post.{md,html}`
-and `plugins/cv-achievements/linkedin-image-prompt.md`.
