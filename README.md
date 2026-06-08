@@ -1,4 +1,4 @@
-# langburd/claude-plugins
+# langburd/agent-skills
 
 Personal Claude Code plugin marketplace.
 Skills-first, versioned with semver, auto-updating via native marketplace autoUpdate.
@@ -9,7 +9,7 @@ Skills-first, versioned with semver, auto-updating via native marketplace autoUp
 
 ```bash
 # Register marketplace
-claude plugin marketplace add langburd/claude-plugins
+claude plugin marketplace add langburd/agent-skills
 
 # Install a plugin
 claude plugin install hello-world@langburd
@@ -18,7 +18,7 @@ claude plugin install hello-world@langburd
 ### Claude Code slash commands
 
 ```
-/plugin marketplace add langburd/claude-plugins
+/plugin marketplace add langburd/agent-skills
 /plugin install hello-world@langburd
 ```
 
@@ -34,7 +34,7 @@ have auto-update disabled by default — enable it in `~/.claude/settings.json`:
     "langburd": {
       "source": {
         "source": "github",
-        "repo": "langburd/claude-plugins"
+        "repo": "langburd/agent-skills"
       },
       "autoUpdate": true
     }
@@ -42,7 +42,7 @@ have auto-update disabled by default — enable it in `~/.claude/settings.json`:
 }
 ```
 
-`claude plugin marketplace add langburd/claude-plugins` registers the entry; set
+`claude plugin marketplace add langburd/agent-skills` registers the entry; set
 `"autoUpdate": true` on it (or toggle via `/plugin` → Marketplaces). No
 SessionStart hook is needed — version comparison and update application are
 built into Claude Code.
