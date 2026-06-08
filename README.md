@@ -49,7 +49,7 @@ built into Claude Code.
 <!-- BEGIN PLUGIN TABLE -->
 | Plugin | Version | Description |
 |--------|---------|-------------|
-| [cv-achievements](plugins/cv-achievements) | 1.0.0 | Turn GitHub PR activity into CV achievement bullets for a job entry |
+| [cv-achievements](plugins/cv-achievements) | 1.1.0 | Turn GitHub PR activity into CV achievement bullets for a job entry |
 <!-- END PLUGIN TABLE -->
 
 ## Contributing
