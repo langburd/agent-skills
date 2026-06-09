@@ -13,7 +13,7 @@ Before searching, collect:
 
 - **GitHub username** - default: `langburd` (used for GitHub searches)
 - **GitLab username** - default: same as GitHub username (used for GitLab searches; confirm if different)
-- **Jira email** - default: `avi.langburd@axonius.com` (can be overridden or derived from GitHub/GitLab)
+- **Jira email** - default: derive from GitHub/GitLab profile, or ask the user
 - **Date range** in `YYYY-MM-DD` format (e.g., `2026-01-20` to `2026-01-22`) - **default: today**
 - **Platforms to search** - default: both GitHub and GitLab (skip a platform if user specifies only one)
 
@@ -46,14 +46,14 @@ gh api users/USERNAME --jq '{email: .email, name: .name}'
 glab api users --jq '.[] | select(.username=="USERNAME") | {email: .public_email, name: .name}'
 ```
 
-**Note:** For Axonius users, the pattern is typically `firstname.lastname@axonius.com`. If the profile email doesn't match or is null, construct it from the user's display name.
+**Note:** The email pattern is typically `firstname.lastname@<org-domain>.com`. If the profile email doesn't match or is null, construct it from the user's display name.
 
 **IMPORTANT:** Names may appear in different orders (e.g., "Doe John" instead of "John Doe"). Try both orderings:
 
 ```bash
 NAME="John Doe"
-EMAIL1=$(echo "$NAME" | awk '{print tolower($1"."$2)"@axonius.com"}')  # john.doe@
-EMAIL2=$(echo "$NAME" | awk '{print tolower($2"."$1)"@axonius.com"}')  # doe.john@
+EMAIL1=$(echo "$NAME" | awk '{print tolower($1"."$2)"@your-org.com"}')  # john.doe@
+EMAIL2=$(echo "$NAME" | awk '{print tolower($2"."$1)"@your-org.com"}')  # doe.john@
 ```
 
 ### Validating Jira Email
@@ -93,7 +93,7 @@ acli jira workitem view TICKET-KEY --json
 # Example response: "reporter": {"display_name": "Samantha Petherson"}
 
 # 4. Construct email from discovered Jira name
-# "Samantha Petherson" → samantha.petherson@axonius.com
+# "Samantha Petherson" → samantha.petherson@your-org.com
 ```
 
 **Why this works:** Users often reference their Jira tickets in PR/MR titles. The ticket's reporter/assignee reveals their actual Jira display name.
@@ -259,8 +259,8 @@ Each day gets one table per platform plus one Jira table, all sorted by time:
 
 | Time (UTC) | Action | PR | Repository | Author | Title |
 |------------|--------|----|------------|--------|-------|
-| 07:56 | Merged | https://github.com/Axonius/repo/pull/123 | repo | username | INF-1234 – Title |
-| 17:08 | Approved | https://github.com/Axonius/repo/pull/125 | repo | other-user | INF-9999 – Review title |
+| 07:56 | Merged | https://github.com/my-org/repo/pull/123 | repo | username | PROJ-1234 – Title |
+| 17:08 | Approved | https://github.com/my-org/repo/pull/125 | repo | other-user | PROJ-9999 – Review title |
 
 ### GitLab MRs
 
@@ -273,8 +273,8 @@ Each day gets one table per platform plus one Jira table, all sorted by time:
 
 | Time (UTC) | Action | Ticket | Project | Summary |
 |------------|--------|--------|---------|---------|
-| 08:30 | Created | https://axonius.atlassian.net/browse/INF-1234 | INF | Ticket summary |
-| 14:15 | Resolved | https://axonius.atlassian.net/browse/INF-5678 | INF | Another ticket |
+| 08:30 | Created | https://your-org.atlassian.net/browse/PROJ-1234 | PROJ | Ticket summary |
+| 14:15 | Resolved | https://your-org.atlassian.net/browse/PROJ-5678 | PROJ | Another ticket |
 
 ---
 ```
