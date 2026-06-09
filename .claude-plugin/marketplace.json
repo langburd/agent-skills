@@ -6,6 +6,12 @@
   "description": "Personal Claude Code marketplace",
   "plugins": [
     {
+      "name": "claude-to-agents",
+      "source": "./plugins/claude-to-agents",
+      "description": "Convert Claude Code skills/config into agent definitions for other agent runtimes",
+      "version": "0.1.0"
+    },
+    {
       "name": "cv-achievements",
       "source": "./plugins/cv-achievements",
       "description": "Turn GitHub PR activity into CV achievement bullets for a job entry",
