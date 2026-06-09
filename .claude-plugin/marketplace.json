@@ -12,6 +12,12 @@
       "version": "1.1.0"
     },
     {
+      "name": "humanizer",
+      "source": "./plugins/humanizer",
+      "description": "Rewrite AI-sounding text into natural human prose — strip filler, hedging, and robotic phrasing",
+      "version": "0.1.0"
+    },
+    {
       "name": "linkedin-post",
       "source": "./plugins/linkedin-post",
       "description": "Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt",
