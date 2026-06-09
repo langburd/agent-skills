@@ -183,7 +183,7 @@ Structure based on template if available, otherwise use:
 **If Jira ticket found in branch name or commits:**
 
 - Extract ticket key (e.g., `PROJ-123`)
-- Add link at top: `[PROJ-123](https://axonius.atlassian.net/browse/PROJ-123)`
+- Add link at top: `[PROJ-123](https://your-org.atlassian.net/browse/PROJ-123)`
 
 ## Step 7: Update Description
 
@@ -208,7 +208,7 @@ EOF
 ## Example Output
 
 ```markdown
-[AUTH-456](https://axonius.atlassian.net/browse/AUTH-456)
+[AUTH-456](https://your-org.atlassian.net/browse/AUTH-456)
 
 ## Summary
 - Add JWT-based authentication middleware

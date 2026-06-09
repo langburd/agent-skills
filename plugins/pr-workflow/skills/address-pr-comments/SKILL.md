@@ -7,7 +7,7 @@ description: Use when the user asks to "address PR comments", "fix review commen
 
 Autonomously addresses unanswered review comments on pull requests. By default
 operates on the current branch's PR. With `all`, discovers every open PR authored
-by the current user across Axonius repos. For each PR, addresses every comment
+by the current user across your GitHub org's repos. For each PR, addresses every comment
 (code changes or discussion replies), pushes changes, undrafts if needed,
 re-requests reviews, and produces a final report.
 
@@ -23,8 +23,8 @@ re-requests reviews, and produces a final report.
 **Default behavior** (no `all`): detect the current PR from the active git branch and
 process only that PR. If the branch has no associated PR, report it and stop.
 
-**`all` mode**: discover all open PRs authored by the current user across Axonius
-GitHub repos and process every one that has unanswered review comments.
+**`all` mode**: discover all open PRs authored by the current user across your
+GitHub org's repos and process every one that has unanswered review comments.
 
 ### Modes
 
@@ -202,7 +202,7 @@ query($searchQuery: String!) {
       }
     }
   }
-}' -f searchQuery="is:pr is:open author:${GH_USER} org:Axonius"
+}' -f searchQuery="is:pr is:open author:${GH_USER} org:${GH_ORG}"
 ```
 
 **IMPORTANT**: Do NOT use `$login` variable interpolation inside the GraphQL
@@ -237,7 +237,7 @@ Write a Python script that:
 ```json
 [
   {
-    "repo": "Axonius/tf-infrastructure",
+    "repo": "my-org/my-repo",
     "number": 5621,
     "title": "INF-3376 - ...",
     "url": "https://github.com/...",
@@ -283,8 +283,8 @@ Found {N} PRs with unanswered review comments:
 
 | # | Repository | PR | Unanswered | Draft |
 |---|------------|----|------------|-------|
-| 1 | Axonius/tf-infrastructure | #5621 - Title... | 3 threads | No |
-| 2 | Axonius/packer | #355 - Title... | 2 threads | Yes |
+| 1 | my-org/repo-a | #5621 - Title... | 3 threads | No |
+| 2 | my-org/repo-b | #355 - Title... | 2 threads | Yes |
 
 Mode: FULL - Processing all PRs autonomously. Will report results when done.
 ```
@@ -296,8 +296,8 @@ Found {N} PRs with unanswered review comments:
 
 | # | Repository | PR | Unanswered | Draft |
 |---|------------|----|------------|-------|
-| 1 | Axonius/tf-infrastructure | #5621 - Title... | 3 threads | No |
-| 2 | Axonius/packer | #355 - Title... | 2 threads | Yes |
+| 1 | my-org/repo-a | #5621 - Title... | 3 threads | No |
+| 2 | my-org/repo-b | #355 - Title... | 2 threads | Yes |
 
 Mode: DRY-RUN - Analyzing all PRs. No changes will be made, no replies posted.
 ```
@@ -356,8 +356,8 @@ git worktree add "$WORKTREE_DIR" {HEAD_REF_NAME}
 cd "$REPO_ROOT"
 ```
 
-Where `{REPO_NAME}` is the repo portion after the slash (e.g., `packer` from
-`Axonius/packer`).
+Where `{REPO_NAME}` is the repo portion after the slash (e.g., `repo-b` from
+`my-org/repo-b`).
 
 ### 2c. Verify .gitignore
 
@@ -379,9 +379,9 @@ shell operator precedence issues that can duplicate entries.
 Store the mapping of PR number → worktree absolute path for passing to agents:
 
 ```text
-PR #5621 → /Users/avi/git/axonius/tf-infrastructure/.worktrees/task.INF-3376.increase-timeout
-PR #5527 → /Users/avi/git/axonius/tf-infrastructure/.worktrees/feature.DEVOPS-789.add-ecr
-PR #355  → /Users/avi/git/axonius/tf-infrastructure/.worktrees/packer/bugfix.INF-2695.alma-linux
+PR #5621 → /Users/user/git/my-org/repo-a/.worktrees/task.PROJ-3376.increase-timeout
+PR #5527 → /Users/user/git/my-org/repo-a/.worktrees/feature.PROJ-789.add-ecr
+PR #355  → /Users/user/git/my-org/repo-a/.worktrees/repo-b/bugfix.PROJ-2695.fix-issue
 ```
 
 ## Step 3: Dispatch Processing Agents (Parallel)
