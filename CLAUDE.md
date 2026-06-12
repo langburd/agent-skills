@@ -27,8 +27,10 @@ After any plugin edit, run `./scripts/sync.sh` to propagate changes.
 
 ## Plugin READMEs
 
-Every `plugins/<name>/README.md` must include an **Installation** section at
-the top (after the title) with the two-command install snippet:
+Every `plugins/<name>/README.md` is **required**. It must contain:
+
+1. `# <plugin-name>` title
+2. `## Installation` section immediately after the title with the two-command snippet:
 
 ```markdown
 ## Installation
@@ -40,12 +42,19 @@ claude plugin install <bundle-name>@langburd
 
 ```
 
+3. A one-paragraph description of what the plugin does.
+4. A `## Skills` table listing each skill, what it does, and trigger phrases.
+5. A `## Prerequisites` section if any CLI tools or auth are needed (omit if none).
+
+Use existing READMEs (`plugins/humanizer/README.md`, `plugins/pr-workflow/README.md`) as templates.
+
 ## Workflow: Adding or Editing a Plugin
 
 1. Edit skill content in `plugins/<name>/skills/<skill-name>/SKILL.md`
 2. Bump `version` in `plugins/<name>/.claude-plugin/plugin.json`
-3. Run `./scripts/sync.sh` (regenerates marketplace.json + README table)
-4. Commit — pre-commit hook runs `sync.sh` again as a safety net
+3. **Create or update `plugins/<name>/README.md`** (required — see Plugin READMEs above)
+4. Run `./scripts/sync.sh` (regenerates marketplace.json + README table)
+5. Commit — pre-commit hook runs `sync.sh` again as a safety net
 
 ## Plugin Structure
 
