@@ -1,0 +1,5 @@
+{
+  "description": "PR/MR workflow helpers: fix, address-pr-comments, pr-mr-comment-update",
+  "name": "pr-workflow",
+  "version": "0.1.0"
+}

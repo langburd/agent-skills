@@ -28,6 +28,12 @@
       "source": "./plugins/linkedin-post",
       "description": "Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt",
       "version": "0.1.0"
+    },
+    {
+      "name": "pr-workflow",
+      "source": "./plugins/pr-workflow",
+      "description": "PR/MR workflow helpers: fix, address-pr-comments, pr-mr-comment-update",
+      "version": "0.1.0"
     }
   ]
 }
