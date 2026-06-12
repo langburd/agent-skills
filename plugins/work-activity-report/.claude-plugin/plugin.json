@@ -1,0 +1,5 @@
+{
+  "description": "Generate a work-activity report from your recent Git/PR/Jira activity",
+  "name": "work-activity-report",
+  "version": "0.1.0"
+}

@@ -34,6 +34,12 @@
       "source": "./plugins/pr-workflow",
       "description": "PR/MR workflow helpers: fix, address-pr-comments, pr-mr-comment-update",
       "version": "0.1.0"
+    },
+    {
+      "name": "work-activity-report",
+      "source": "./plugins/work-activity-report",
+      "description": "Generate a work-activity report from your recent Git/PR/Jira activity",
+      "version": "0.1.0"
     }
   ]
 }
