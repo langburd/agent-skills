@@ -1,0 +1,5 @@
+{
+  "description": "Use Hermes Tweet for Hermes Agent X/Twitter reads and explicitly gated actions",
+  "name": "hermes-tweet",
+  "version": "0.1.0"
+}

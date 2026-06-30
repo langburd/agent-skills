@@ -51,6 +51,7 @@ built into Claude Code.
 |--------|---------|-------------|
 | [claude-to-agents](plugins/claude-to-agents) | 0.1.0 | Convert Claude Code skills/config into agent definitions for other agent runtimes |
 | [cv-achievements](plugins/cv-achievements) | 1.1.0 | Turn GitHub PR activity into CV achievement bullets for a job entry |
+| [hermes-tweet](plugins/hermes-tweet) | 0.1.0 | Use Hermes Tweet for Hermes Agent X/Twitter reads and explicitly gated actions |
 | [humanizer](plugins/humanizer) | 0.1.0 | Rewrite AI-sounding text into natural human prose — strip filler, hedging, and robotic phrasing |
 | [linkedin-post](plugins/linkedin-post) | 0.1.0 | Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt |
 | [meta-reflection](plugins/meta-reflection) | 0.1.0 | Self-reflection & session-history skills: reflection, reflection-global, session-history |

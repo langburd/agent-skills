@@ -18,6 +18,12 @@
       "version": "1.1.0"
     },
     {
+      "name": "hermes-tweet",
+      "source": "./plugins/hermes-tweet",
+      "description": "Use Hermes Tweet for Hermes Agent X/Twitter reads and explicitly gated actions",
+      "version": "0.1.0"
+    },
+    {
       "name": "humanizer",
       "source": "./plugins/humanizer",
       "description": "Rewrite AI-sounding text into natural human prose — strip filler, hedging, and robotic phrasing",
