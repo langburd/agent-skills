@@ -2,22 +2,33 @@
 
 Commands for collecting one user's Jira activity in a date range.
 
-## Tool choice: `acli` first, Atlassian MCP as fallback
+## Tool choice: both, for different jobs
 
-`acli` (Atlassian's official CLI) is the primary tool. It wins on three
-measured grounds:
+Neither tool does the whole job. Use each for what it can actually do:
 
-- **`currentUser()` works in JQL.** When reporting on the authenticated user
-  there is no need to resolve an email address at all. This removes the entire
-  class of "guess the email format" failures.
-- **`--fields` trims the payload.** Jira issue JSON is enormous by default.
-  Restricting fields keeps responses small.
-- **Output pipes to `jq`.** Cheap local filtering instead of returning bulk
-  JSON into the model's context.
+| Job | Tool | Why |
+| --- | --- | --- |
+| Find which tickets the user touched | `acli` | `currentUser()` in JQL removes email resolution entirely; output pipes to `jq` |
+| Get timestamps for those tickets | Atlassian MCP `searchJiraIssuesUsingJql` | **`acli` cannot return them at all** |
 
-Use the Atlassian MCP (`searchJiraIssuesUsingJql`) only when `acli` is absent
-or unauthenticated. It accepts the same JQL, so the queries below transfer
-directly — only the invocation changes.
+This split is not a preference — it was measured. `acli jira workitem search`
+rejects the timestamp fields outright:
+
+```text
+✗ Error: fields 'created, updated, resolutiondate, project' are not allowed
+```
+
+Its default field set (`issuetype,key,assignee,priority,status,summary`) has no
+dates in it, and `acli jira workitem view <KEY> --json` returns `created`,
+`updated`, and `resolutiondate` as `null` alongside the null `changelog`.
+
+So: run the JQL below through `acli` to get the ticket keys cheaply, then make
+one MCP call for the timestamps of those keys. If the MCP is unavailable, report
+Jira activity date-only and say so — the tickets are still correct, only the
+times are missing.
+
+When `acli` is the unavailable one instead, the MCP accepts the same JQL and can
+do both jobs alone.
 
 ## Identity
 
@@ -42,30 +53,71 @@ read it here so the skill works for any org.
 For the **authenticated user**, prefer `currentUser()` — it needs no email and
 cannot be wrong:
 
+Keep `--fields` to the allowed set — `key,summary,status,issuetype,assignee`
+works; adding date or project fields errors the whole query out. Derive the
+project from the key prefix (`INF-3706` → `INF`) rather than requesting it.
+
 ```bash
 # Created in range
 acli jira workitem search --jql "reporter = currentUser() AND created >= '<START>' AND created <= '<END> 23:59'" \
-  --fields "key,summary,status,issuetype,created,project" --json --limit 100
+  --fields "key,summary,status,issuetype" --json --limit 100
 
 # Assigned and touched in range
 acli jira workitem search --jql "assignee = currentUser() AND updated >= '<START>' AND updated <= '<END> 23:59'" \
-  --fields "key,summary,status,issuetype,updated,project" --json --limit 100
+  --fields "key,summary,status,issuetype" --json --limit 100
 
 # Resolved in range
 acli jira workitem search --jql "assignee = currentUser() AND resolved >= '<START>' AND resolved <= '<END_PLUS_1>'" \
-  --fields "key,summary,status,resolutiondate,project" --json --limit 100
+  --fields "key,summary,status" --json --limit 100
 
 # Status transitions the user performed
 acli jira workitem search --jql "status changed BY currentUser() DURING ('<START>', '<END_PLUS_1>')" \
-  --fields "key,summary,status,updated,project" --json --limit 100
+  --fields "key,summary,status" --json --limit 100
+```
+
+Pipe through `jq` to keep the payload small — even the allowed field set carries
+avatar URL collections per user:
+
+```bash
+... --json --limit 100 | jq '[.[] | {key, summary: .fields.summary, status: .fields.status.name}]'
+```
+
+Then fetch timestamps for the collected keys in one MCP call:
+
+```text
+searchJiraIssuesUsingJql
+  jql:    "key IN (INF-3706, INF-3705, INF-3701)"
+  fields: ["key", "created", "updated", "resolutiondate"]
 ```
 
 For **another user**, substitute the email. Everything else is identical:
 
 ```bash
 acli jira workitem search --jql "assignee = '<EMAIL>' AND updated >= '<START>' AND updated <= '<END> 23:59'" \
+  --fields "key,summary,status,issuetype" --json --limit 100
+```
+
+### `changed BY` needs an accountId, not an email
+
+The `assignee`/`reporter` fields accept an email, but the `BY` predicate does
+not. `status changed BY '<EMAIL>'` fails with:
+
+```text
+the user '<EMAIL>' does not exist and cannot be used in the 'by' predicate
+```
+
+Use `currentUser()` for the authenticated user. For anyone else, resolve their
+Atlassian accountId first — the Atlassian MCP's `lookupJiraAccountId` does this
+directly — then:
+
+```bash
+acli jira workitem search --jql "status changed BY '<ACCOUNT_ID>' DURING ('<START>', '<END_PLUS_1>')" \
   --fields "key,summary,status,updated,project" --json --limit 100
 ```
+
+If the accountId cannot be resolved, drop this query rather than guessing, and
+note in the report that transitions were not covered for that user. A dropped
+query with a note is recoverable; a silently empty one is not.
 
 ## Resolving another user's email
 
@@ -117,14 +169,15 @@ Which actions carry a real time, and which do not:
 
 | Action | Source field | Time available? |
 | --- | --- | --- |
-| Created | `fields.created` | Yes — full timestamp |
-| Updated | `fields.updated` | Yes — full timestamp |
-| Resolved | `fields.resolutiondate` | Yes — full timestamp |
+| Created | `created` (via MCP) | Yes — full timestamp |
+| Updated | `updated` (via MCP) | Yes — full timestamp |
+| Resolved | `resolutiondate` (via MCP) | Yes — full timestamp |
 | Status changed | none (changelog is null) | **No — date only** |
 
-Request those fields explicitly (`--fields "key,summary,created,updated,resolutiondate,project"`)
-and copy the timestamp through as the API returns it. Jira timestamps carry an
-offset (e.g. `2026-08-18T11:30:00.000+0300`) — convert to UTC, don't truncate.
+The first three come from the MCP timestamp call, not from `acli`. Copy the
+value through as returned and convert to UTC — Jira sends an offset (e.g.
+`2026-08-18T11:30:00.000+0300`), and the offset it uses does not necessarily
+match the user's own profile timezone, so read it rather than assuming.
 
 Two failure modes to avoid, both of which produce a confident wrong report:
 

@@ -70,6 +70,17 @@ Then discard reviews whose `submitted_at` falls outside the requested range.
 Skipping this filter is the single most common source of wrong dates in this
 report.
 
+Expect a lot of noise here. `--involves` and `--reviewed-by` match on the PR's
+`updated` timestamp, so they routinely return PRs whose only in-range event is
+an unrelated bump by someone else — including PRs years old. A run for a single
+day in 2026 returned a PR from 2024. Treat these searches as producing
+*candidates*: a PR earns a row only once an API call shows a real action by this
+user inside the range. Dropping a candidate that yields no such action is
+correct, not a miss.
+
+Similarly, `--created`/`--merged-at` with an `..END_PLUS_1` bound pull in the
+following day's activity by design. Filter those out after fetching.
+
 ## Merge attribution
 
 A user merging someone else's PR is real work that no author-based search

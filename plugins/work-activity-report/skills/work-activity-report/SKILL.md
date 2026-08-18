@@ -28,6 +28,14 @@ state the resolved range in the output so the reader can check it.
 Verify the current year before searching. A date range in the wrong year
 returns a confident, empty, entirely wrong report.
 
+**"Yesterday" means the user's local day, not the UTC day.** People remember
+their work in the timezone they were sitting in. Resolve the range in local
+time, then convert the *boundaries* to UTC when querying. This matters at the
+edges: for a user at UTC+3, work after 21:00 local falls on the next UTC day, so
+a naive UTC range silently drops an evening's work off one end and imports
+someone else's morning at the other. Get the local offset from `date +%z` and
+say which day definition you used.
+
 ## Step 1: Preflight
 
 First decide which sources are in scope. When the user names specific platforms
@@ -66,12 +74,16 @@ Dispatch one subagent per active source **in a single message** so they run
 concurrently. Give each: its reference file path, the resolved identity, the
 date range, and the output row shape.
 
-| Source | Reference |
-| --- | --- |
-| GitHub | `references/github.md` |
-| GitLab | `references/gitlab.md` |
-| Jira | `references/jira.md` |
-| Slack | `references/slack.md` |
+| Source | Reference | Tools |
+| --- | --- | --- |
+| GitHub | `references/github.md` | `gh` |
+| GitLab | `references/gitlab.md` | `glab` + `jq` |
+| Jira | `references/jira.md` | `acli` to find tickets, Atlassian MCP for timestamps |
+| Slack | `references/slack.md` | Slack MCP |
+
+The Jira agent needs both `acli` and MCP access — `acli` cannot return
+timestamps, so a CLI-only agent produces date-only Jira rows. Give that agent
+MCP access, or accept and state the loss of precision.
 
 These agents run fixed command sets and return structured rows. There is no
 judgment in the fetching, so a small fast model (Haiku) handles them well and
