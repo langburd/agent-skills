@@ -85,12 +85,22 @@ The Jira agent needs both `acli` and MCP access — `acli` cannot return
 timestamps, so a CLI-only agent produces date-only Jira rows. Give that agent
 MCP access, or accept and state the loss of precision.
 
-These agents run fixed command sets and return structured rows. There is no
-judgment in the fetching, so a small fast model (Haiku) handles them well and
-keeps bulk JSON out of the main context — where it would otherwise crowd out
-the actual work of assembling the report. Use `cli-runner` or an equivalent
-cheap agent type for the three CLI sources; Slack needs an agent with MCP
-access.
+Delegation keeps bulk JSON out of the main context, where it would otherwise
+crowd out the work of assembling the report. But match the model to how much
+judgment the source actually needs — they differ more than they look:
+
+| Source | Model | Why |
+| --- | --- | --- |
+| GitHub | cheap (Haiku) | Fixed `gh` commands, mechanical filtering |
+| GitLab | cheap (Haiku) | Same, once the query-string form is followed |
+| Jira | capable | Hits CLI restrictions that need recognizing, and the acli/MCP split |
+| Slack | capable | Grouping, role classification, the privacy rule, and honest cap reporting are all judgment |
+
+Cheap models have been observed to fail on the Slack and Jira sources
+specifically — inventing a truncation that hadn't happened, dropping timestamps,
+and reporting row counts without the rows. The GitHub and GitLab fetches held up
+fine, which is the pattern to expect: mechanical reads delegate down well, and
+anything requiring a call about what to include does not.
 
 Instruct each agent to return **rows only** — no prose summary, no
 interpretation. Judgment stays here, where the full picture is visible.
@@ -99,8 +109,31 @@ Delegate even for a single source. The reason is context, not parallelism: the
 raw JSON from these queries is bulky and reading it directly crowds out the
 report you are assembling.
 
-If an agent returns nothing, distinguish "ran fine, no activity" from "could
-not run". Have it say which.
+### Check what came back before using it
+
+The common failure of this step is an agent that describes its results instead of
+returning them — "found 18 rows, output above shows all rows" with no rows
+attached — or one that drops a field, such as returning Slack conversations with
+no timestamps. Both look like success and produce a quietly incomplete report.
+
+So treat each agent's reply as data to validate, not to trust:
+
+- Are there actual row objects, or only a description of rows?
+- Does the count match any count the agent claims?
+- Does every row carry the fields the merge needs, above all a timestamp?
+
+When a reply fails these checks, re-run that source yourself rather than
+chasing the agent — a follow-up message often goes unanswered, and the queries
+are short. Losing a source silently is much worse than spending the calls.
+
+Distinguish "ran fine, no activity" from "could not run", and have each agent
+say which. For a genuinely empty source, confirm the tool was working: an
+authenticated `glab` returning no MRs is a real empty week, while an
+unauthenticated one returning nothing is a missing section.
+
+Practical notes on agent types: `cli-runner` has no MCP access, so it suits
+GitHub and GitLab but not Slack; Slack needs a general-purpose agent, and Jira
+needs one with MCP access for timestamps.
 
 ## Step 3: Merge
 
@@ -109,10 +142,26 @@ not run". Have it say which.
 2. **Filter to range.** Some results legitimately fall outside it: `gh search`
    matches on PR update time rather than review time, and Slack's date
    modifiers are exclusive. Drop what falls outside.
-3. **Normalize to UTC.** Slack returns workspace-local time (e.g. IDT); the
-   others return UTC. Convert Slack rows before sorting or they land hours from
-   the work they relate to. Say which timezone the tables use.
-4. **Sort chronologically** by actual action time.
+3. **Normalize to UTC.** Read each row's zone rather than assuming it:
+
+   | Source | Returns | Action |
+   | --- | --- | --- |
+   | GitHub | UTC (`...Z`) | none |
+   | GitLab | UTC (`...Z`) | none |
+   | Jira | an offset, e.g. `-0500` | convert |
+   | Slack | workspace-local, e.g. `IDT` | convert |
+
+   Jira's offset is not the user's profile timezone and has been observed as
+   `-0500` for a user in `Asia/Jerusalem` — so parse what arrives instead of
+   inferring it from anything else. Getting this wrong shifts rows by hours and
+   destroys the chronology the report exists to show: an unconverted Slack
+   message at `13:33 IDT` sorts three hours away from the PR at `10:13 UTC` it
+   was actually about. Say which timezone the tables use.
+4. **Sort chronologically** by actual action time. Rows with only a date — every
+   Jira row when the MCP is unavailable, and Jira transitions always — sort to
+   the top of their day, before the timed rows, with `(date only)` in the time
+   column. Placing them there rather than interleaving them at a guessed time
+   keeps the report from implying a sequence it cannot support.
 5. **Group by day.**
 
 ## Output

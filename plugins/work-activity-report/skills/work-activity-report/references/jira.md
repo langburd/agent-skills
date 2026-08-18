@@ -82,6 +82,24 @@ avatar URL collections per user:
 ... --json --limit 100 | jq '[.[] | {key, summary: .fields.summary, status: .fields.status.name}]'
 ```
 
+Note that `acli` writes its errors to **stdout**, not stderr, so a failed query
+reaches `jq` as text and surfaces as a misleading parse error:
+
+```text
+jq: error (at <stdin>:0): Cannot index string with "fields"
+```
+
+The real problem is the line above it (`✗ Error: ...`). When a piped query fails
+in a way that makes no sense, re-run it without the pipe to see the actual
+message before changing anything else.
+
+### `DURING` includes today
+
+The `DURING ('<START>', '<END_PLUS_1>')` upper bound is inclusive of that day, so
+transitions made *today* match a range that ended yesterday. Check each returned
+ticket's transition date against the requested range and drop the strays, the
+same as for the other sources.
+
 Then fetch timestamps for the collected keys in one MCP call:
 
 ```text

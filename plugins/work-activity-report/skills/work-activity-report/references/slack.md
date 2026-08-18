@@ -48,6 +48,13 @@ Search is capped at **20 results per call** with cursor pagination. Exhaustive
 coverage of a chatty week is many calls, so the default is a bounded sweep:
 a fixed set of targeted searches, each 1–2 pages.
 
+**Exhaust `from:me` rather than capping it.** It is the search that establishes
+what the user actually did, and page 1 alone has been observed to omit three
+channels the user posted in. It also terminates quickly — three pages for a
+two-day range — so following its cursor to the end is cheap and materially
+changes the report. Keep the 1–2 page cap for the other three searches, which
+are corroborating rather than definitive.
+
 Always use explicit `after:`/`before:` modifiers rather than relying on
 relevance ordering to approximate a date range — relevance sorting will happily
 return last month's message.
@@ -91,20 +98,28 @@ only when the user asks for exhaustive coverage.
 Every message as a row is noise — nobody's standup needs "Thank you" at
 16:19:48. Group by conversation and report the user's role in it.
 
+Every row needs a time, not just a date — the merge sorts all four sources
+together chronologically, so a date-only row cannot be placed. Use the first
+message of the user's participation, and keep it in its source zone with the
+zone named so the caller converts rather than guesses:
+
 ```json
-{"date": "2026-08-18", "channel": "#cloud-infrastructure-public",
- "is_private_dm": false, "topic": "Terraform state lock troubleshooting",
+{"date": "2026-08-18", "local_time": "15:54:34", "local_tz": "IDT",
+ "channel": "#cloud-infrastructure-public", "is_private_dm": false,
+ "topic": "Terraform state lock troubleshooting",
  "role": "Answered", "message_count": 4,
  "permalink": "https://org.slack.com/archives/C05.../p178..."}
 ```
 
 Roles: Raised, Answered, Decided, Participated, Mentioned.
 
-For DMs, omit `topic` and set `channel` to participant names only:
+For DMs, omit `topic` and set `channel` to participant names only. The time
+still belongs on the row — a timestamp is metadata, not content:
 
 ```json
-{"date": "2026-08-18", "channel": "DM with Kevin Gardiner",
- "is_private_dm": true, "role": "Participated", "message_count": 2}
+{"date": "2026-08-18", "local_time": "16:19:48", "local_tz": "IDT",
+ "channel": "DM with Kevin Gardiner", "is_private_dm": true,
+ "role": "Participated", "message_count": 2}
 ```
 
 Derive the topic from channel messages you are already returning — don't spend
