@@ -30,16 +30,22 @@ returns a confident, empty, entirely wrong report.
 
 ## Step 1: Preflight
 
-Run these together and read identity from the results. Hardcoding a username
-means the skill silently reports on the wrong person when someone else uses it.
+First decide which sources are in scope. When the user names specific platforms
+("just my GitLab MRs", "my PRs and tickets"), only those are in scope — don't
+authenticate or query the rest. When they name none, every authenticated
+platform is in scope.
+
+Then resolve identity for the in-scope sources only, running the checks
+together. Hardcoding a username means the skill silently reports on the wrong
+person when someone else uses it.
 
 ```bash
-gh api user --jq '{login: .login, name: .name}'
-glab api user | jq '{username, name, id}'
-acli jira auth status
+gh api user --jq '{login: .login, name: .name}'        # GitHub in scope
+glab api user | jq '{username, name, id}'              # GitLab in scope
+acli jira auth status                                  # Jira in scope
 ```
 
-Plus `slack_read_user_profile` with no `user_id` for the Slack identity.
+Plus `slack_read_user_profile` with no `user_id` when Slack is in scope.
 
 Usernames often differ across platforms, and there is no reliable way to derive
 one from another. When a platform is authenticated but its username looks
@@ -76,6 +82,10 @@ access.
 
 Instruct each agent to return **rows only** — no prose summary, no
 interpretation. Judgment stays here, where the full picture is visible.
+
+Delegate even for a single source. The reason is context, not parallelism: the
+raw JSON from these queries is bulky and reading it directly crowds out the
+report you are assembling.
 
 If an agent returns nothing, distinguish "ran fine, no activity" from "could
 not run". Have it say which.
@@ -163,17 +173,28 @@ Range: 2026-08-17..2026-08-18 · Sources: GitHub, GitLab, Jira, Slack
 
 ### Coverage note
 
-Close with what was skipped or capped:
+Close with what was left out and why. Keep two reasons distinct, because they
+mean opposite things to the reader:
+
+- **Not requested** — the user scoped the report. Nothing is missing.
+- **Unavailable** — the source could not be reached. Data *is* missing, and the
+  reader may want to fix the auth and re-run.
 
 ```markdown
-**Coverage:** GitLab skipped (glab not authenticated). Slack bounded sweep
-(4 searches × 2 pages); #busy-channel had more results. Times in UTC
-(Slack converted from IDT).
+**Coverage:** GitLab only, as requested — GitHub, Jira, and Slack not queried.
+Times in UTC.
+```
+
+```markdown
+**Coverage:** GitHub, Jira, Slack. GitLab unavailable (glab not authenticated) —
+any MRs are missing from this report. Slack bounded sweep (4 searches × 2
+pages); #busy-channel had further results. Times in UTC (Slack converted from
+IDT).
 ```
 
 This is the difference between a report someone can trust and one that quietly
-overstates its own completeness. A reader who knows GitLab was skipped can go
-look; a reader who doesn't will conclude there were no MRs.
+overstates its own completeness. A reader who knows GitLab was unavailable can
+go look; a reader who doesn't will conclude there were no MRs.
 
 ## Pitfalls
 

@@ -2,17 +2,39 @@
 
 Commands for collecting one user's GitLab MR activity in a date range.
 
-## Two `glab` facts that break the obvious approach
+## Five `glab` facts that break the obvious approach
+
+These were each confirmed by running the commands. Getting any of them wrong
+produces an empty result rather than an error, which is why they are listed
+before the queries.
 
 **`glab api` has no `--jq` flag.** Unlike `gh`, it errors with
 `Unknown flag: --jq`. Pipe to the external `jq` binary instead. Every command
 below does this.
 
-**`reviewer_username` silently returns `[]`.** The `merge_requests` endpoint
-accepts the parameter and returns an empty array regardless of reality. This is
-the dangerous kind of failure: it looks identical to "this person reviewed
-nothing", so a report built on it under-reports review work without any error.
-Use the events endpoint (below) for review activity instead.
+**Pass GET parameters in the query string, not with `-F`.** `--field`/`-F`
+switches the request to POST, and `merge_requests` then answers
+`{"error":"404 Not Found"}`. Build the URL as
+`"merge_requests?author_username=...&created_after=..."` and quote it.
+
+**`scope=all` is required.** Without it, `merge_requests` defaults to
+`created_by_me`, so anything involving other people's MRs vanishes. Note also
+that combining the narrow scopes (`scope=created_by_me`, `scope=assigned_to_me`)
+with date filters has been observed to return `[]` even when a matching MR
+exists — prefer `scope=all` plus `author_username`.
+
+**`reviewer_username` silently returns `[]`.** The endpoint accepts the
+parameter and returns an empty array regardless of reality. This is the
+dangerous kind of failure: it looks identical to "this person reviewed nothing",
+so a report built on it under-reports review work without any error. Use the
+events endpoint (below) for review activity instead.
+
+**Never query `merge_requests` unscoped by user.** Asking for all MRs updated in
+a range across a large instance returns `{"message":{"error":"Request timed
+out"}}`. Approach "MRs I merged for others" through the events endpoint instead.
+
+Timestamps use a capital `T` (`2026-08-04T00:00:00Z`). For a single day, set
+`created_after` to that day and `created_before` to the next.
 
 ## Identity
 
@@ -70,6 +92,33 @@ Map them to report actions:
 Note the `after`/`before` bounds here are **exclusive dates, not timestamps**,
 which is why `after` is the day *before* your start date. Verify the returned
 `created_at` values fall in range and drop the strays.
+
+### Turning events into rows with URLs
+
+Event objects identify the MR by `target_iid` and `project_id`, not by a web
+URL, so an event alone cannot fill the `MR` column. Ask for those fields
+explicitly:
+
+```bash
+glab api --paginate "users/<USER_ID>/events?after=<START_MINUS_1>&before=<END_PLUS_1>&per_page=100" \
+  | jq '[.[] | select(.target_type=="MergeRequest") | {action_name, target_iid, target_title, project_id, created_at}]'
+```
+
+Then resolve each distinct `(project_id, target_iid)` pair once:
+
+```bash
+glab api "projects/<PROJECT_ID>/merge_requests/<TARGET_IID>" \
+  | jq '{url: .web_url, project: .references.full, author: .author.username, title}'
+```
+
+Deduplicate the pairs before fetching — several events commonly land on the same
+MR (approved, then commented, then merged), and each needs the same one lookup.
+MRs already retrieved by the authored-MR queries above need no second fetch;
+reuse what you have.
+
+This is the one place per-MR fetches are unavoidable, since review and comment
+activity is not otherwise reachable. It is also the activity most likely to be
+missing from a report, so it is worth the calls.
 
 ## Project paths without extra calls
 

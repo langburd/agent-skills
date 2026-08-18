@@ -111,3 +111,17 @@ Derive the topic from channel messages you are already returning — don't spend
 extra calls fetching thread bodies purely to label a topic. Use
 `slack_read_thread` only when a thread is clearly central to the day's work and
 its subject cannot be inferred from the matched message.
+
+Two details worth getting right:
+
+- **Permalinks are best-effort.** Search results embed one only sometimes. Emit
+  the permalink when the result carries it and omit the field otherwise — don't
+  spend a call per row chasing one, and don't emit a constructed URL you haven't
+  verified.
+- **Skip the user's self-DM.** A DM whose only participant is the user is a
+  personal scratchpad, not a conversation with anyone. Counting it inflates the
+  collaboration picture.
+
+Return timestamps as the search gave them, tagged with their zone (e.g.
+`local_time: "16:19:48", local_tz: "IDT"`), and let the caller convert. Relabeling
+local time as UTC yourself is the one error here that cannot be caught later.

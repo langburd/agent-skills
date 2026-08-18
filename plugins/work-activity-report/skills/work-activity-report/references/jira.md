@@ -113,6 +113,30 @@ Return one row per distinct action:
  "title": "Ticket summary"}
 ```
 
-Set `date_only: true` for status transitions, where only the date is known.
+Which actions carry a real time, and which do not:
+
+| Action | Source field | Time available? |
+| --- | --- | --- |
+| Created | `fields.created` | Yes — full timestamp |
+| Updated | `fields.updated` | Yes — full timestamp |
+| Resolved | `fields.resolutiondate` | Yes — full timestamp |
+| Status changed | none (changelog is null) | **No — date only** |
+
+Request those fields explicitly (`--fields "key,summary,created,updated,resolutiondate,project"`)
+and copy the timestamp through as the API returns it. Jira timestamps carry an
+offset (e.g. `2026-08-18T11:30:00.000+0300`) — convert to UTC, don't truncate.
+
+Two failure modes to avoid, both of which produce a confident wrong report:
+
+- **Don't zero-fill an unknown time.** `"2026-08-18T00:00:00Z"` with
+  `date_only: false` claims the work happened at midnight, and the merged report
+  will sort it there. If only the date is known, set `date_only: true` and leave
+  `timestamp_utc` as the bare date.
+- **Don't mark a known time as date-only.** Created, Updated, and Resolved all
+  have real timestamps; discarding them costs the report its chronology, which is
+  the main thing it exists to show.
+
 Deduplicate by `(url, action)` — the queries overlap by design, since a ticket
-created and resolved in the same range legitimately appears in both.
+created and resolved in the same range legitimately appears in both. An
+`Updated` row is only worth emitting when no more specific action for that
+ticket exists on the same day; otherwise it restates the Created or Resolved row.
