@@ -129,10 +129,20 @@ its subject cannot be inferred from the matched message.
 
 Two details worth getting right:
 
-- **Permalinks are best-effort.** Search results embed one only sometimes. Emit
-  the permalink when the result carries it and omit the field otherwise — don't
-  spend a call per row chasing one, and don't emit a constructed URL you haven't
-  verified.
+- **Permalinks are best-effort — never constructed.** Search results embed one
+  only sometimes. Copy it verbatim when present and omit the field entirely
+  otherwise. Do not assemble a URL from a channel name, and do not carry a
+  message ID from one row onto another: both have been done in practice,
+  producing `.../archives/C[eng_ask_devex]/p1787...` and a real ID from
+  `#cloud-infrastructure-public` pasted onto a `#security_and_devops` row. Real
+  channel IDs are `C` followed by alphanumerics with no brackets. A row without
+  a permalink is fine; a row with a fabricated one sends the reader to a dead
+  link they had no reason to distrust.
+- **Attribute each message to the conversation it actually came from.** The
+  result label is the source of truth for whether a hit is a DM or a channel.
+  Filing a DM under a channel row is not a cosmetic error — it moves private
+  content into a row the reader will read as channel-visible, defeating the
+  privacy rule above.
 - **Skip the user's self-DM.** A DM whose only participant is the user is a
   personal scratchpad, not a conversation with anyone. Counting it inflates the
   collaboration picture.

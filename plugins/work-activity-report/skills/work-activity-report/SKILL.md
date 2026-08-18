@@ -116,15 +116,35 @@ returning them — "found 18 rows, output above shows all rows" with no rows
 attached — or one that drops a field, such as returning Slack conversations with
 no timestamps. Both look like success and produce a quietly incomplete report.
 
+Worse, a struggling agent tends to fill gaps with plausible-looking values
+rather than report the gap. Observed in practice: placeholder channel IDs
+emitted as real URLs (`.../archives/C[eng_ask_devex]/p1787...`); a genuine
+message ID copied from one channel onto an unrelated row; "no truncation"
+asserted in the same breath as admitting page 1 ended with cursors outstanding;
+a private DM filed under a public channel row; and another user's merge
+attributed to the subject of the report. Each of these reads as ordinary output.
+
 So treat each agent's reply as data to validate, not to trust:
 
 - Are there actual row objects, or only a description of rows?
 - Does the count match any count the agent claims?
 - Does every row carry the fields the merge needs, above all a timestamp?
+- Do the identifiers look real? A channel ID is `C` followed by alphanumerics,
+  never a bracketed name. Two rows in different channels sharing one message ID
+  means at least one is invented.
+- Does any claim of completeness contradict a cursor or page count in the same
+  reply?
+- For anything asserting another person's action — "merged by", "approved by",
+  "mentioned by" — confirm it against the API before it becomes a row. This is
+  the one class of error that misattributes work between colleagues.
 
 When a reply fails these checks, re-run that source yourself rather than
 chasing the agent — a follow-up message often goes unanswered, and the queries
 are short. Losing a source silently is much worse than spending the calls.
+
+Prefer dropping a field to guessing it. A row with no permalink is honest and
+still useful; a row with an invented one is a link that will fail for whoever
+clicks it, in a report they had no reason to doubt.
 
 Distinguish "ran fine, no activity" from "could not run", and have each agent
 say which. For a genuinely empty source, confirm the tool was working: an
@@ -274,3 +294,7 @@ go look; a reader who doesn't will conclude there were no MRs.
 | Slack rows hours off | Results are workspace-local, not UTC — convert |
 | Slack range includes stray dates | `after:`/`before:` are exclusive — widen, then filter |
 | Report looks empty but isn't | An unauthenticated source was skipped without saying so |
+| Slack permalinks 404 | A subagent constructed them from channel names — copy verbatim or omit |
+| A colleague's merge credited to the user | `merged_by` not checked before emitting a Merged row |
+| Private DM appears as channel activity | Row misattributed; the search result label is the source of truth |
+| Whole channels missing from Slack | Sweep stopped at page 1 with a cursor outstanding while reporting no truncation |

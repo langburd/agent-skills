@@ -92,6 +92,13 @@ gh api repos/<OWNER>/<REPO>/pulls/<NUMBER> --jq '{merged_by: .merged_by.login, m
 
 Check this on PRs from `--involves` where the author is someone else.
 
+Never infer a merger from the fact that a PR is merged and the user was
+involved. A run has emitted a "Merged" row for this user on a PR whose
+`merged_by` was a colleague — credit for someone else's action, in a report that
+may be read as a performance record. Emit a Merged row only when `merged_by`
+matches the user, and when it doesn't, either omit it or name the real merger
+explicitly.
+
 ## Per-PR fetches at volume
 
 The two commands above are one call per PR, so a busy week can mean dozens of
