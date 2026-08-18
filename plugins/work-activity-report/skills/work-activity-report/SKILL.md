@@ -85,6 +85,14 @@ The Jira agent needs both `acli` and MCP access — `acli` cannot return
 timestamps, so a CLI-only agent produces date-only Jira rows. Give that agent
 MCP access, or accept and state the loss of precision.
 
+Have the Jira agent pull each ticket's **description** on this pass, not just
+the summary, and extract any upstream source reference it names — a Zendesk
+ticket, a support request, a linked incident. Support-driven tickets are a large
+share of infrastructure work, and "12 of 22 tickets came straight from Zendesk"
+is the single most legible fact about a week like that. Fetching descriptions
+later means a second pass over every ticket, so ask for it up front. Where a
+ticket cites no source, record none rather than inferring one from the summary.
+
 Delegation keeps bulk JSON out of the main context, where it would otherwise
 crowd out the work of assembling the report. But match the model to how much
 judgment the source actually needs — they differ more than they look:
@@ -104,6 +112,28 @@ anything requiring a call about what to include does not.
 
 Instruct each agent to return **rows only** — no prose summary, no
 interpretation. Judgment stays here, where the full picture is visible.
+
+### Tell the Slack agent whose DMs these are
+
+A subagent asked to resolve subjects across dozens of private threads will
+often refuse — and it is right to, on the information it has. From inside a
+delegated prompt, "read 45 DMs spanning 40 colleagues and index them by
+counterpart" is indistinguishable from building a surveillance artifact about
+someone else. The agent cannot see the session it was spawned from.
+
+So supply the context that makes it legitimate, and only when it actually is:
+
+- These are the **authenticated user's own DMs**, in their own session.
+- The report is **for that user, about their own week**.
+- The output is a file they own plus a draft in their own self-DM, which they
+  read and edit before anyone else sees it.
+
+Omit any of this and expect a refusal partway through — after the other sources
+have already returned, which is the expensive place to discover it.
+
+When the report is about **someone else**, none of the above is true. Don't
+paper over it: the DM rule in the Output section applies, and the agent should
+be told to return participant names and counts only.
 
 Delegate even for a single source. The reason is context, not parallelism: the
 raw JSON from these queries is bulky and reading it directly crowds out the
@@ -216,7 +246,8 @@ with no activity that day.
 | Time (UTC) | Channel | Topic | Role | Msgs |
 |---|---|---|---|---|
 | 12:54 | #cloud-infrastructure-public | Terraform state lock | Answered | 4 |
-| 13:39 | DM with Kevin Gardiner | (private) | Participated | 2 |
+| 13:39 | DM with Kevin Gardiner | Wiz sensor upgrade approval | Answered | 2 |
+| 15:02 | DM with Dana Levi | (personal) | Participated | 3 |
 
 ---
 ```
@@ -226,8 +257,65 @@ limitation in `references/jira.md`. Don't substitute the ticket's `updated`
 timestamp, which reflects the last change by anyone and is usually not the
 user's action.
 
-DM rows carry participant names and counts, no topic or content, unless the
-user asked for DM detail in this invocation.
+### DMs
+
+Record DM topics the same as channel topics. A great deal of real work happens
+in DMs — troubleshooting, review requests, access approvals, onboarding — and a
+report that reduces 35 DM threads to `(private)` understates the week badly. The
+person reading it usually needs exactly that detail to explain where their time
+went.
+
+Write the *subject*, not the content: "TFE service account SAML troubleshooting",
+"PR #6378 review request", "onboarding: TFE Dev/Prod IaC workflow". Never quote
+anyone, never paraphrase what the other person said, and never carry over
+anything they'd expect to stay between the two of them.
+
+Mark non-work DMs `(personal)` and give them a row with a count but no topic.
+Birthday wishes, lunch plans, and personal check-ins are noise in a work report
+and nobody's business in a shared one.
+
+Note what this label costs: you can only apply it *after* reading enough to
+know, so by the time a thread is classified personal, you have already seen the
+personal thing. That's unavoidable — but it means the classification is where
+the discretion lives. Don't record what it was, don't hint at it in the topic
+column, and don't carry it into the Slack message. `(personal)` with a count is
+the whole row.
+
+Two cases still get the old treatment. **Reports about another person** —
+someone else's DM subjects aren't yours to summarize, so use `(private)` unless
+that person asked for the report themselves. And a DM the user flags as
+sensitive stays `(private)` however it was found.
+
+**When the DM sweep comes back partial or refused**, don't retry it harder and
+don't fill the gaps. Take what the search already surfaced — many threads carry
+a usable subject in the result snippet without opening anything — and leave the
+rest as participant-and-count rows. Then say which is which: "15 threads with
+subjects, ~20 recorded as counts only". A report that is explicit about its own
+partial coverage is more useful than one that hides it, and far more useful than
+one padded with inferred topics. Offer the user the option of naming the
+threads that mattered; they know instantly what took a week to guess at.
+
+### Collaboration section
+
+For ranges longer than a few days, add one table after the daily sections and
+**before** the Summary, collecting the work that left no PR or ticket — incident
+triage, unblocking a colleague, onboarding, decisions made in a thread. These
+are scattered one row per day in the chronology, where their weight is invisible;
+gathered up, they're often a third of the range.
+
+```markdown
+## Collaboration not captured by PRs or tickets
+
+| Dates | With | Subject |
+|---|---|---|
+| 08-06 → 08-07 | Matthew Wollenweber, Raf Borges | Lambda RCA — EventBridge invoke permission and KMS grant (11 msgs) |
+| 08-09, 08-12 | Malki Morad | Onboarding — TFE Dev/Prod IaC workflow (13 msgs) |
+```
+
+Merge the multi-day threads: one row per subject with the dates it spanned,
+not one row per day. Say underneath how it was built — subjects already
+resolved in the daily tables, versus threads opened specifically for this — and
+how many rows remain counts-only.
 
 ### Summary
 
@@ -243,6 +331,7 @@ Range: 2026-08-17..2026-08-18 · Sources: GitHub, GitLab, Jira, Slack
 | GitLab MRs created / merged / approved | N / N / N |
 | Jira tickets created / resolved / transitioned | N / N / N |
 | Slack threads participated | N |
+| Slack threads with subject resolved / counts only | N / N |
 
 | Category | Items |
 |---|---|
@@ -325,6 +414,29 @@ dropped, masked by `continue-on-error`", not "merged PR #6361".
 Open with the headline counts (PRs opened/merged/reviewed, tickets
 opened/resolved) so the volume is visible before the detail.
 
+**Include the work that only exists in Slack.** Incident triage, unblocking a
+colleague, onboarding someone, an architecture call made in a thread — none of
+it leaves a PR or a ticket behind, so it vanishes from every other record the
+user has. It is often a third of the week. Pull it from the DM and channel rows
+and give it a theme of its own, or fold each item into whichever theme it
+belongs to.
+
+Describe it by outcome: "unblocked Data team's Databricks/WARP connectivity",
+"walked a new hire through the TFE Dev/Prod IaC workflow", "diagnosed the
+EventBridge invoke permission with SecOps over three days". Naming the colleague
+is fine and usually useful. Quoting them is not — the same subject-not-content
+rule as the report. Leave `(personal)` rows out entirely.
+
+**Each item belongs to exactly one theme.** Onboarding a colleague is either
+collaboration or review load, not both; a ticket that came from Zendesk sits
+under the support load, not also under platform work. Repetition reads as
+padding and makes the message longer than the attention it will get. When an
+item genuinely spans two themes, put it where its outcome landed and let the
+other theme reference it in passing.
+
+Where a ticket had an upstream source, name it — `ZD #70575 → INF-3696` shows
+the request arriving and being closed out, which a bare ticket key does not.
+
 ### Slack formatting
 
 Slack's message API is not markdown, and getting this wrong produces visible
@@ -375,3 +487,7 @@ draft may be theirs and unsent.
 | Slack links render as raw markdown | Slack uses `<url\|text>`, not `[text](url)` |
 | `draft_already_exists` error | One attached draft per channel — the user must delete the old one first |
 | Report gone after the session ends | Step 4 was skipped; always write to `~/work-activity-reports/` |
+| Slack agent refuses the DM sweep | Ownership context missing from its prompt — state that these are the user's own DMs in their own session |
+| Second pass needed for Zendesk refs | Jira agent fetched summaries only; ask for descriptions on the first pass |
+| Same item in two themes of the message | Assign each to one theme; cross-reference instead of repeating |
+| Collaboration work invisible in a long report | It's one row per day in the chronology — gather it into its own table before the Summary |
