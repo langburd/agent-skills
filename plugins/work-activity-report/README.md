@@ -31,12 +31,23 @@ Defaults: authenticated user, today's date, all authenticated platforms.
 Sources that are unavailable are skipped and named in the report, so a missing
 token never reads as "no activity".
 
+Each report is saved to `~/work-activity-reports/`, named for its date range,
+and the skill offers a thematic Slack summary drafted into your own DM — never
+sent, so you edit it before anyone else sees it.
+
 ## Privacy
 
-Slack DMs and group DMs contribute **metadata only** by default — participants,
-message counts, dates, no message text. Ask explicitly to include DM content in
-a given report. Channel activity, already visible to the channel, includes
-topic detail.
+Reports record the **subject** of a conversation, never its content. "PR #6378
+review request" or "TFE SAML troubleshooting", never a quote or a paraphrase of
+what anyone said. This applies to channels and DMs alike.
+
+DMs are included by default when reporting on **yourself**, because a great deal
+of real work happens there — troubleshooting, review requests, access approvals,
+onboarding — and omitting it understates the week. Threads that turn out to be
+personal are recorded as `(personal)` with a message count and nothing else.
+
+When reporting on **someone else**, DMs contribute participants and counts only.
+Their conversation subjects are not yours to summarize.
 
 ## Prerequisites
 
