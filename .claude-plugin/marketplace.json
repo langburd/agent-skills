@@ -44,8 +44,8 @@
     {
       "name": "work-activity-report",
       "source": "./plugins/work-activity-report",
-      "description": "Generate a work-activity report from your recent Git/PR/Jira activity",
-      "version": "0.1.0"
+      "description": "Generate a work-activity report from your recent GitHub, GitLab, Jira, and Slack activity",
+      "version": "0.2.0"
     }
   ]
 }

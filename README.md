@@ -55,7 +55,7 @@ built into Claude Code.
 | [linkedin-post](plugins/linkedin-post) | 0.1.0 | Turn any subject into a ready-to-post LinkedIn post: an HTML preview with copy buttons plus an image-generation prompt |
 | [meta-reflection](plugins/meta-reflection) | 0.1.0 | Self-reflection & session-history skills: reflection, reflection-global, session-history |
 | [pr-workflow](plugins/pr-workflow) | 0.1.0 | PR/MR workflow helpers: fix, address-pr-comments, pr-mr-comment-update |
-| [work-activity-report](plugins/work-activity-report) | 0.1.0 | Generate a work-activity report from your recent Git/PR/Jira activity |
+| [work-activity-report](plugins/work-activity-report) | 0.2.0 | Generate a work-activity report from your recent GitHub, GitLab, Jira, and Slack activity |
 <!-- END PLUGIN TABLE -->
 
 ## Contributing

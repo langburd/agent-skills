@@ -5,3 +5,6 @@
 .idea/
 .vscode/
 docs/superpowers/
+
+# skill-creator eval workspaces (local test scratch)
+*-workspace/
