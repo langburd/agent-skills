@@ -1,6 +1,6 @@
 ---
 name: work-activity-report
-description: Use when the user asks what they or someone else worked on — daily/weekly standup reports, activity logs, "what did I do this week", performance-review prep, or a summary of PRs, MRs, Jira tickets, and Slack discussions over a date range. Gathers from GitHub, GitLab, Jira, and Slack in parallel and returns one chronological report. Use this even when the user names only one platform ("show my PRs from Monday") or doesn't name any ("what was I doing last Tuesday").
+description: Use when the user asks what they or someone else worked on — daily/weekly standup reports, activity logs, "what did I do this week", performance-review prep, or a summary of PRs, MRs, Jira tickets, and Slack discussions over a date range. Gathers from GitHub, GitLab, Jira, and Slack in parallel, returns one chronological report, saves it to ~/work-activity-reports/, and offers a manager-facing Slack draft. Use this even when the user names only one platform ("show my PRs from Monday") or doesn't name any ("what was I doing last Tuesday"), and when they ask to turn an existing report into a Slack message.
 ---
 
 # Work Activity Report
@@ -277,6 +277,79 @@ This is the difference between a report someone can trust and one that quietly
 overstates its own completeness. A reader who knows GitLab was unavailable can
 go look; a reader who doesn't will conclude there were no MRs.
 
+## Step 4: Save the report
+
+Always write the finished report to `~/work-activity-reports/`, named for the
+resolved range:
+
+- Single day: `YYYY-MM-DD.md`
+- Range: `YYYY-MM-DD_to_YYYY-MM-DD.md`
+
+Create the directory if it doesn't exist. Write the file even when the user only
+asked to see the report — these accumulate into a work log that is far more
+useful than any single invocation, and re-running a wide range is slow and
+burns a lot of API calls. Tell the user the path.
+
+If a file for that exact range already exists, say so and ask before
+overwriting. A previous run may have had better source coverage than this one.
+
+Derivative artifacts belong in the same directory, suffixed after the range:
+`YYYY-MM-DD_to_YYYY-MM-DD_zendesk-tickets.md`.
+
+## Step 5: Offer a Slack draft
+
+The report is a record; a Slack message is what actually gets read by a manager
+or a standup channel. After saving, offer to draft one — and when the user asks
+for the message directly, skip the offer and write it.
+
+Draft it, never send it. Use `slack_send_message_draft`, which saves to the
+user's Drafts and lets them edit before sending. Sending someone's
+self-assessment to their manager without them reading it first is not a
+recoverable mistake.
+
+**Draft into the user's own DM channel** — the self-DM, not a team channel and
+not the manager's DM. That gives them a private place to edit and reword before
+forwarding it themselves. Resolve it from the identity established in preflight:
+pass their own user ID as `channel_id`, or use the self-DM channel ID if the
+user supplies one. Only draft elsewhere if the user names a destination
+explicitly in this invocation.
+
+**Restructure, don't paste.** The report is chronological because that's how it
+was verified; the message is thematic because that's how it's read. Group the
+work into 4-6 themes — production incidents, platform hardening, the steady
+support load, review load — and lead with impact rather than ticket order.
+Within each theme, say what broke or what was needed and what changed as a
+result. A manager wants "restored S3 write permissions a prior PR had silently
+dropped, masked by `continue-on-error`", not "merged PR #6361".
+
+Open with the headline counts (PRs opened/merged/reviewed, tickets
+opened/resolved) so the volume is visible before the detail.
+
+### Slack formatting
+
+Slack's message API is not markdown, and getting this wrong produces visible
+junk in the user's draft:
+
+| Want | Write | Not |
+| --- | --- | --- |
+| Bold | `*bold*` | `**bold**` |
+| Link | `<https://url\|INF-1234>` | `[INF-1234](https://url)` |
+| Bullet | `•` literal | `-` |
+| Ampersand | `&` typed directly | `&amp;` |
+
+The ampersand is the one that bites. HTML entities pass through the API
+undecoded and render literally as `&#38;` in the draft — a section header
+reading `Access &#38; identity` is the giveaway. Avoid `&`, `<`, and `>` outside
+of link syntax; write "and" instead.
+
+Make every ticket reference clickable. `<https://org.atlassian.net/browse/INF-3701|INF-3701>`
+for Jira; do the same for Zendesk, PRs, and MRs. A bare `INF-3701` forces the
+reader to go look it up, and at that point they won't.
+
+Only one attached draft is allowed per channel. If one already exists, the API
+returns `draft_already_exists` — ask the user to delete it, since the existing
+draft may be theirs and unsent.
+
 ## Pitfalls
 
 | Issue | Cause and fix |
@@ -298,3 +371,7 @@ go look; a reader who doesn't will conclude there were no MRs.
 | A colleague's merge credited to the user | `merged_by` not checked before emitting a Merged row |
 | Private DM appears as channel activity | Row misattributed; the search result label is the source of truth |
 | Whole channels missing from Slack | Sweep stopped at page 1 with a cursor outstanding while reporting no truncation |
+| `&#38;` visible in the Slack draft | An HTML entity was sent; the API doesn't decode it — type `&` directly |
+| Slack links render as raw markdown | Slack uses `<url\|text>`, not `[text](url)` |
+| `draft_already_exists` error | One attached draft per channel — the user must delete the old one first |
+| Report gone after the session ends | Step 4 was skipped; always write to `~/work-activity-reports/` |
