@@ -1,351 +1,493 @@
 ---
 name: work-activity-report
-description: Use when the user asks for a summary of work activity, daily/weekly standup report, what someone worked on, activity log, or needs to see all PRs, MRs, and Jira tickets touched during a specific date range
+description: Use when the user asks what they or someone else worked on — daily/weekly standup reports, activity logs, "what did I do this week", performance-review prep, or a summary of PRs, MRs, Jira tickets, and Slack discussions over a date range. Gathers from GitHub, GitLab, Jira, and Slack in parallel, returns one chronological report, saves it to ~/work-activity-reports/, and offers a manager-facing Slack draft. Use this even when the user names only one platform ("show my PRs from Monday") or doesn't name any ("what was I doing last Tuesday"), and when they ask to turn an existing report into a Slack message.
 ---
 
 # Work Activity Report
 
-Generate comprehensive work activity reports by searching GitHub PRs, GitLab MRs, and Jira tickets for a specific user and date range.
+Build one chronological report of a person's work across GitHub PRs, GitLab
+MRs, Jira tickets, and Slack discussions.
 
-## Required Information
+The value is in the merge. Each platform can answer "what happened here", but
+only a combined, time-sorted view shows an actual working day — the ticket
+opened at 09:00, the MR that closed it at 14:00, the Slack thread where it got
+decided in between.
 
-Before searching, collect:
+## Parameters
 
-- **GitHub username** - default: `langburd` (used for GitHub searches)
-- **GitLab username** - default: same as GitHub username (used for GitLab searches; confirm if different)
-- **Jira email** - default: derive from GitHub/GitLab profile, or ask the user
-- **Date range** in `YYYY-MM-DD` format (e.g., `2026-01-20` to `2026-01-22`) - **default: today**
-- **Platforms to search** - default: both GitHub and GitLab (skip a platform if user specifies only one)
+| Parameter | Default |
+| --- | --- |
+| User | The authenticated user on each platform (resolve it, never assume) |
+| Date range | Today |
+| Sources | Every platform that is authenticated |
 
-If no user is specified, use the defaults above.
-If no date range is specified, search for **today's activity only** (current date).
+Accept ranges as `YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`. Relative phrasing
+("this week", "last 3 days") is fine — resolve it against the current date and
+state the resolved range in the output so the reader can check it.
 
-## Platform Detection
+Verify the current year before searching. A date range in the wrong year
+returns a confident, empty, entirely wrong report.
 
-If not specified by the user, check which platforms are relevant:
+**"Yesterday" means the user's local day, not the UTC day.** People remember
+their work in the timezone they were sitting in. Resolve the range in local
+time, then convert the *boundaries* to UTC when querying. This matters at the
+edges: for a user at UTC+3, work after 21:00 local falls on the next UTC day, so
+a naive UTC range silently drops an evening's work off one end and imports
+someone else's morning at the other. Get the local offset from `date +%z` and
+say which day definition you used.
 
-```bash
-# Check if GitHub CLI is authenticated
-gh auth status 2>&1 | head -1
+## Step 1: Preflight
 
-# Check if GitLab CLI is authenticated
-glab auth status 2>&1 | head -1
-```
+First decide which sources are in scope. When the user names specific platforms
+("just my GitLab MRs", "my PRs and tickets"), only those are in scope — don't
+authenticate or query the rest. When they name none, every authenticated
+platform is in scope.
 
-Search all authenticated platforms by default. Skip a platform if auth fails or user explicitly excludes it.
-
-### Fetching Jira Email from GitHub/GitLab
-
-If searching for another user and Jira email is not provided, try fetching from GitHub profile first, then GitLab:
-
-```bash
-# From GitHub
-gh api users/USERNAME --jq '{email: .email, name: .name}'
-
-# From GitLab (if GitHub returns null name)
-glab api users --jq '.[] | select(.username=="USERNAME") | {email: .public_email, name: .name}'
-```
-
-**Note:** The email pattern is typically `firstname.lastname@<org-domain>.com`. If the profile email doesn't match or is null, construct it from the user's display name.
-
-**IMPORTANT:** Names may appear in different orders (e.g., "Doe John" instead of "John Doe"). Try both orderings:
+Then resolve identity for the in-scope sources only, running the checks
+together. Hardcoding a username means the skill silently reports on the wrong
+person when someone else uses it.
 
 ```bash
-NAME="John Doe"
-EMAIL1=$(echo "$NAME" | awk '{print tolower($1"."$2)"@your-org.com"}')  # john.doe@
-EMAIL2=$(echo "$NAME" | awk '{print tolower($2"."$1)"@your-org.com"}')  # doe.john@
+gh api user --jq '{login: .login, name: .name}'        # GitHub in scope
+glab api user | jq '{username, name, id}'              # GitLab in scope
+acli jira auth status                                  # Jira in scope
 ```
 
-### Validating Jira Email
+Plus `slack_read_user_profile` with no `user_id` when Slack is in scope.
 
-Before running all Jira searches, validate the email format with a quick check:
+Usernames often differ across platforms, and there is no reliable way to derive
+one from another. When a platform is authenticated but its username looks
+unrelated to the others, ask rather than guess — one question is cheaper than a
+plausible-looking report about nobody.
 
-```bash
-acli jira workitem search --jql "(assignee = 'EMAIL' OR reporter = 'EMAIL') ORDER BY updated DESC" --limit 1 --json
-```
+**A source that fails preflight is skipped and named in the output.** This
+matters more than it sounds: a missing GitLab token produces an empty MR list,
+which is indistinguishable from a week with no MRs. Silence there turns a setup
+problem into a false statement about someone's work.
 
-**Validation logic:**
+For a report on **another user**, skip Jira's `currentUser()` path and resolve
+their identity per `references/jira.md`.
 
-- If results returned → email format is correct
-- If empty `[]` → likely wrong email format, try the other format
+## Step 2: Fan out, one agent per source
 
-**Strategy:**
+Dispatch one subagent per active source **in a single message** so they run
+concurrently. Give each: its reference file path, the resolved identity, the
+date range, and the output row shape.
 
-1. Construct both email formats from profile name
-2. Run validation query with format 1
-3. If empty, run validation query with format 2
-4. Use whichever format returns results
-5. If both return empty, try the **Jira ticket fallback** (below)
-6. If fallback fails, user may have no Jira activity (proceed with code-platform-only report)
+| Source | Reference | Tools |
+| --- | --- | --- |
+| GitHub | `references/github.md` | `gh` |
+| GitLab | `references/gitlab.md` | `glab` + `jq` |
+| Jira | `references/jira.md` | `acli` to find tickets, Atlassian MCP for timestamps |
+| Slack | `references/slack.md` | Slack MCP |
 
-### Fallback: Discover Jira Name from PR/MR Titles
+The Jira agent needs both `acli` and MCP access — `acli` cannot return
+timestamps, so a CLI-only agent produces date-only Jira rows. Give that agent
+MCP access, or accept and state the loss of precision.
 
-**When to use:** GitHub/GitLab name and Jira name may be completely different (e.g., "Samantha Duncan" on GitHub vs "Samantha Petherson" in Jira).
+Have the Jira agent pull each ticket's **description** on this pass, not just
+the summary, and extract any upstream source reference it names — a Zendesk
+ticket, a support request, a linked incident. Support-driven tickets are a large
+share of infrastructure work, and "12 of 22 tickets came straight from Zendesk"
+is the single most legible fact about a week like that. Fetching descriptions
+later means a second pass over every ticket, so ask for it up front. Where a
+ticket cites no source, record none rather than inferring one from the summary.
 
-If both email formats return empty, extract Jira ticket keys from PR/MR titles and look up the ticket:
+Delegation keeps bulk JSON out of the main context, where it would otherwise
+crowd out the work of assembling the report. But match the model to how much
+judgment the source actually needs — they differ more than they look:
 
-```bash
-# 1. Look at PR/MR titles from search results for Jira ticket keys (e.g., "DEVOPS-9090", "INF-1234")
-# 2. Fetch the ticket to see reporter/assignee names
-acli jira workitem view TICKET-KEY --json
+| Source | Model | Why |
+| --- | --- | --- |
+| GitHub | cheap (Haiku) | Fixed `gh` commands, mechanical filtering |
+| GitLab | cheap (Haiku) | Same, once the query-string form is followed |
+| Jira | capable | Hits CLI restrictions that need recognizing, and the acli/MCP split |
+| Slack | capable | Grouping, role classification, the privacy rule, and honest cap reporting are all judgment |
 
-# 3. Extract the actual Jira name from reporter or assignee
-# Example response: "reporter": {"display_name": "Samantha Petherson"}
+Cheap models have been observed to fail on the Slack and Jira sources
+specifically — inventing a truncation that hadn't happened, dropping timestamps,
+and reporting row counts without the rows. The GitHub and GitLab fetches held up
+fine, which is the pattern to expect: mechanical reads delegate down well, and
+anything requiring a call about what to include does not.
 
-# 4. Construct email from discovered Jira name
-# "Samantha Petherson" → samantha.petherson@your-org.com
-```
+Instruct each agent to return **rows only** — no prose summary, no
+interpretation. Judgment stays here, where the full picture is visible.
 
-**Why this works:** Users often reference their Jira tickets in PR/MR titles. The ticket's reporter/assignee reveals their actual Jira display name.
+### Tell the Slack agent whose DMs these are
 
-## GitHub PR Search
+A subagent asked to resolve subjects across dozens of private threads will
+often refuse — and it is right to, on the information it has. From inside a
+delegated prompt, "read 45 DMs spanning 40 colleagues and index them by
+counterpart" is indistinguishable from building a surveillance artifact about
+someone else. The agent cannot see the session it was spawned from.
 
-**CRITICAL:** Use `gh search prs` with proper date flags. Verify the current year.
+So supply the context that makes it legitimate, and only when it actually is:
 
-### Step 1: Initial Search Commands (run in parallel)
+- These are the **authenticated user's own DMs**, in their own session.
+- The report is **for that user, about their own week**.
+- The output is a file they own plus a draft in their own self-DM, which they
+  read and edit before anyone else sees it.
 
-```bash
-# PRs created by user in date range
-gh search prs --author=USERNAME --created=START_DATE..END_DATE_PLUS_1 \
-  --json number,title,repository,state,createdAt,url --limit 100
+Omit any of this and expect a refusal partway through — after the other sources
+have already returned, which is the expensive place to discover it.
 
-# PRs merged by user in date range
-gh search prs --author=USERNAME --merged-at=START_DATE..END_DATE_PLUS_1 \
-  --json number,title,repository,closedAt,url --limit 100
+When the report is about **someone else**, none of the above is true. Don't
+paper over it: the DM rule in the Output section applies, and the agent should
+be told to return participant names and counts only.
 
-# PRs user was involved with (reviewed, commented, etc.)
-gh search prs --involves=USERNAME --updated=START_DATE..END_DATE_PLUS_1 \
-  --json number,title,repository,state,author,updatedAt,url --limit 100
+Delegate even for a single source. The reason is context, not parallelism: the
+raw JSON from these queries is bulky and reading it directly crowds out the
+report you are assembling.
 
-# PRs reviewed by user
-gh search prs --reviewed-by=USERNAME --updated=START_DATE..END_DATE_PLUS_1 \
-  --json number,title,repository,state,author,url --limit 100
-```
+### Check what came back before using it
 
-### Step 2: Get Exact Review Timestamps (CRITICAL)
+The common failure of this step is an agent that describes its results instead of
+returning them — "found 18 rows, output above shows all rows" with no rows
+attached — or one that drops a field, such as returning Slack conversations with
+no timestamps. Both look like success and produce a quietly incomplete report.
 
-**Why this is needed:** `gh search` uses the PR's `updated` timestamp, NOT individual review timestamps.
+Worse, a struggling agent tends to fill gaps with plausible-looking values
+rather than report the gap. Observed in practice: placeholder channel IDs
+emitted as real URLs (`.../archives/C[eng_ask_devex]/p1787...`); a genuine
+message ID copied from one channel onto an unrelated row; "no truncation"
+asserted in the same breath as admitting page 1 ended with cursors outstanding;
+a private DM filed under a public channel row; and another user's merge
+attributed to the subject of the report. Each of these reads as ordinary output.
 
-When the PR set is large (more than ~8 PRs), offload these per-PR `gh api`
-fetches to the `cli-runner` agent (`subagent_type: "cli-runner"`, runs on
-Haiku) rather than inline. Pass it the `{OWNER}/{REPO}#{NUMBER}` list and the
-command templates below, and have it return the merged JSON. These are pure
-mechanical reads with no judgment, so a cheap model fits and the many
-round-trips stay off the session model. For a handful of PRs, run inline — the
-handoff overhead isn't worth it.
+So treat each agent's reply as data to validate, not to trust:
 
-For each PR from `--involves` and `--reviewed-by` results, fetch the user's actual review timestamps:
+- Are there actual row objects, or only a description of rows?
+- Does the count match any count the agent claims?
+- Does every row carry the fields the merge needs, above all a timestamp?
+- Do the identifiers look real? A channel ID is `C` followed by alphanumerics,
+  never a bracketed name. Two rows in different channels sharing one message ID
+  means at least one is invented.
+- Does any claim of completeness contradict a cursor or page count in the same
+  reply?
+- For anything asserting another person's action — "merged by", "approved by",
+  "mentioned by" — confirm it against the API before it becomes a row. This is
+  the one class of error that misattributes work between colleagues.
 
-```bash
-gh api repos/OWNER/REPO/pulls/NUMBER/reviews \
-  --jq '.[] | select(.user.login=="USERNAME") | {submitted_at, state}'
-```
+When a reply fails these checks, re-run that source yourself rather than
+chasing the agent — a follow-up message often goes unanswered, and the queries
+are short. Losing a source silently is much worse than spending the calls.
 
-**Review states:** APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED
+Prefer dropping a field to guessing it. A row with no permalink is honest and
+still useful; a row with an invented one is a link that will fail for whoever
+clicks it, in a report they had no reason to doubt.
 
-### Step 3: Check Who Merged PRs
+Distinguish "ran fine, no activity" from "could not run", and have each agent
+say which. For a genuinely empty source, confirm the tool was working: an
+authenticated `glab` returning no MRs is a real empty week, while an
+unauthenticated one returning nothing is a missing section.
 
-```bash
-gh api repos/OWNER/REPO/pulls/NUMBER --jq '{merged_by: .merged_by.login, merged_at}'
-```
+Practical notes on agent types: `cli-runner` has no MCP access, so it suits
+GitHub and GitLab but not Slack; Slack needs a general-purpose agent, and Jira
+needs one with MCP access for timestamps.
 
-### Important Notes
+## Step 3: Merge
 
-- Use `--merged-at` for merge date filtering (NOT `--merged`)
-- `mergedAt` is NOT a valid JSON field for search results - use `closedAt` instead
-- The `--involves` flag catches PRs where user reviewed, commented, or was mentioned
-- Always use `--limit 100` to capture all activity
-- End date should be +1 day to include full day (e.g., for Jan 20-22, use `..2026-01-23`)
+1. **Deduplicate** by `(url, action)`. Overlap is by design — the searches are
+   deliberately redundant so nothing is missed.
+2. **Filter to range.** Some results legitimately fall outside it: `gh search`
+   matches on PR update time rather than review time, and Slack's date
+   modifiers are exclusive. Drop what falls outside.
+3. **Normalize to UTC.** Read each row's zone rather than assuming it:
 
-## GitLab MR Search
+   | Source | Returns | Action |
+   | --- | --- | --- |
+   | GitHub | UTC (`...Z`) | none |
+   | GitLab | UTC (`...Z`) | none |
+   | Jira | an offset, e.g. `-0500` | convert |
+   | Slack | workspace-local, e.g. `IDT` | convert |
 
-**CRITICAL:** Use `glab api` for date-filtered MR searches. The `glab mr list` command lacks granular date filtering.
+   Jira's offset is not the user's profile timezone and has been observed as
+   `-0500` for a user in `Asia/Jerusalem` — so parse what arrives instead of
+   inferring it from anything else. Getting this wrong shifts rows by hours and
+   destroys the chronology the report exists to show: an unconverted Slack
+   message at `13:33 IDT` sorts three hours away from the PR at `10:13 UTC` it
+   was actually about. Say which timezone the tables use.
+4. **Sort chronologically** by actual action time. Rows with only a date — every
+   Jira row when the MCP is unavailable, and Jira transitions always — sort to
+   the top of their day, before the timed rows, with `(date only)` in the time
+   column. Placing them there rather than interleaving them at a guessed time
+   keeps the report from implying a sequence it cannot support.
+5. **Group by day.**
 
-### Step 1: Initial MR Search Commands (run in parallel)
+## Output
 
-```bash
-# MRs created by user in date range
-glab api merge_requests \
-  -F author_username=GITLAB_USERNAME \
-  -F created_after=START_DATEt00:00:00Z \
-  -F created_before=END_DATE_PLUS_1t00:00:00Z \
-  --paginate --jq '.[] | {iid, title, web_url, project_id, created_at, state}'
-
-# MRs merged by user in date range
-glab api merge_requests \
-  -F author_username=GITLAB_USERNAME \
-  -F state=merged \
-  -F updated_after=START_DATEt00:00:00Z \
-  -F updated_before=END_DATE_PLUS_1t00:00:00Z \
-  --paginate --jq '.[] | select(.merged_at >= "START_DATE") | {iid, title, web_url, project_id, merged_at}'
-
-# MRs where user is a reviewer/assigned
-glab api merge_requests \
-  -F reviewer_username=GITLAB_USERNAME \
-  -F updated_after=START_DATEt00:00:00Z \
-  -F updated_before=END_DATE_PLUS_1t00:00:00Z \
-  --paginate --jq '.[] | {iid, title, web_url, project_id, updated_at, author}'
-```
-
-### Step 2: Get Exact Approval Timestamps
-
-For each MR from reviewer results, fetch actual approval timestamps:
-
-```bash
-# Get approvals on a specific MR
-glab api projects/PROJECT_ID/merge_requests/MR_IID/approvals \
-  --jq '.approved_by[] | select(.user.username=="GITLAB_USERNAME") | {created_at: "N/A - use MR updated_at"}'
-
-# Get user's notes/comments on an MR with timestamps
-glab api projects/PROJECT_ID/merge_requests/MR_IID/notes \
-  --jq '.[] | select(.author.username=="GITLAB_USERNAME") | {created_at, body}'
-```
-
-**Note:** GitLab approval timestamps are not directly exposed via API; use the MR's `updated_at` as a proxy when needed.
-
-### Step 3: Check Who Merged MRs
-
-```bash
-glab api projects/PROJECT_ID/merge_requests/MR_IID \
-  --jq '{merged_by: .merged_by.username, merged_at}'
-```
-
-### GitLab Important Notes
-
-- GitLab `project_id` is the numeric ID from the MR object; use it for subsequent API calls
-- Use ISO 8601 timestamps (`2026-01-20t00:00:00Z`) for `created_after`/`created_before`
-- `--paginate` is required to get all results beyond the first page
-- `glab api merge_requests` searches across ALL accessible projects; scope to a group if needed: `glab api groups/GROUP_ID/merge_requests`
-
-## Jira Ticket Search
-
-**CRITICAL:** Use `acli` for Jira queries.
-
-### Search Commands (run in parallel)
-
-```bash
-# Tickets created by user in date range
-acli jira workitem search --jql "reporter = 'EMAIL' AND created >= 'START_DATE' AND created <= 'END_DATE 23:59'" --json --limit 100
-
-# Tickets with status changed by user in date range
-acli jira workitem search --jql "status changed BY 'EMAIL' DURING ('START_DATE', 'END_DATE_PLUS_1')" --json --limit 100
-
-# Tickets resolved by user in date range
-acli jira workitem search --jql "resolved >= 'START_DATE' AND resolved <= 'END_DATE_PLUS_1' AND assignee = 'EMAIL'" --json --limit 100
-
-# Tickets assigned to user and updated in date range
-acli jira workitem search --jql "assignee = 'EMAIL' AND updated >= 'START_DATE' AND updated <= 'END_DATE_PLUS_1'" --json --limit 100
-```
-
-### JQL Tips
-
-- For `DURING` clauses, end date should be +1 day
-- Use `'EMAIL'` with quotes for email addresses
-- `status changed BY` captures status transitions made by the user
-- Get ticket details with `acli jira workitem view TICKET_KEY --json` for resolution dates
-
-## Output Format
-
-**CRITICAL:** Always use tables for ALL output. Present results chronologically, sorted by date and time.
-
-### Daily Summary Template
-
-Each day gets one table per platform plus one Jira table, all sorted by time:
+Use tables throughout. One table per platform per day, omitting any platform
+with no activity that day.
 
 ```markdown
-## [DATE] ([Day of Week])
+## 2026-08-18 (Tuesday)
 
 ### GitHub PRs
 
 | Time (UTC) | Action | PR | Repository | Author | Title |
-|------------|--------|----|------------|--------|-------|
-| 07:56 | Merged | https://github.com/my-org/repo/pull/123 | repo | username | PROJ-1234 – Title |
-| 17:08 | Approved | https://github.com/my-org/repo/pull/125 | repo | other-user | PROJ-9999 – Review title |
+|---|---|---|---|---|---|
+| 07:56 | Merged | https://github.com/org/repo/pull/123 | org/repo | langburd | PROJ-1234 – Title |
 
 ### GitLab MRs
 
 | Time (UTC) | Action | MR | Project | Author | Title |
-|------------|--------|----|---------|--------|-------|
-| 09:12 | Created | https://gitlab.com/group/repo/-/merge_requests/42 | repo | username | INF-5678 – Title |
-| 15:30 | Approved | https://gitlab.com/group/repo/-/merge_requests/43 | repo | other-user | INF-0000 – Review title |
+|---|---|---|---|---|---|
+| 09:12 | Created | https://gitlab.com/group/repo/-/merge_requests/42 | group/repo | langburd | INF-5678 – Title |
 
 ### Jira Tickets
 
 | Time (UTC) | Action | Ticket | Project | Summary |
-|------------|--------|--------|---------|---------|
+|---|---|---|---|---|
 | 08:30 | Created | https://your-org.atlassian.net/browse/PROJ-1234 | PROJ | Ticket summary |
-| 14:15 | Resolved | https://your-org.atlassian.net/browse/PROJ-5678 | PROJ | Another ticket |
+| (date only) | Status changed | https://your-org.atlassian.net/browse/PROJ-5678 | PROJ | Another ticket |
+
+### Slack Discussions
+
+| Time (UTC) | Channel | Topic | Role | Msgs |
+|---|---|---|---|---|
+| 12:54 | #cloud-infrastructure-public | Terraform state lock | Answered | 4 |
+| 13:39 | DM with Kevin Gardiner | Wiz sensor upgrade approval | Answered | 2 |
+| 15:02 | DM with Dana Levi | (personal) | Participated | 3 |
 
 ---
 ```
 
-**Key formatting rules:**
+Jira transitions show `(date only)` in the time column — see the changelog
+limitation in `references/jira.md`. Don't substitute the ticket's `updated`
+timestamp, which reflects the last change by anyone and is usually not the
+user's action.
 
-- Omit a platform's table entirely if there is no activity for that day on that platform
-- Include day of week in date header (e.g., "2026-01-27 (Monday)")
-- Use horizontal rule `---` between days
-- Actions: Created, Merged, Approved, Commented, Changes Requested
+### DMs
 
-### Summary Statistics
+Record DM topics the same as channel topics. A great deal of real work happens
+in DMs — troubleshooting, review requests, access approvals, onboarding — and a
+report that reduces 35 DM threads to `(private)` understates the week badly. The
+person reading it usually needs exactly that detail to explain where their time
+went.
 
-Always present statistics as a table:
+Write the *subject*, not the content: "TFE service account SAML troubleshooting",
+"PR #6378 review request", "onboarding: TFE Dev/Prod IaC workflow". Never quote
+anyone, never paraphrase what the other person said, and never carry over
+anything they'd expect to stay between the two of them.
+
+Mark non-work DMs `(personal)` and give them a row with a count but no topic.
+Birthday wishes, lunch plans, and personal check-ins are noise in a work report
+and nobody's business in a shared one.
+
+Note what this label costs: you can only apply it *after* reading enough to
+know, so by the time a thread is classified personal, you have already seen the
+personal thing. That's unavoidable — but it means the classification is where
+the discretion lives. Don't record what it was, don't hint at it in the topic
+column, and don't carry it into the Slack message. `(personal)` with a count is
+the whole row.
+
+Two cases still get the old treatment. **Reports about another person** —
+someone else's DM subjects aren't yours to summarize, so use `(private)` unless
+that person asked for the report themselves. And a DM the user flags as
+sensitive stays `(private)` however it was found.
+
+**When the DM sweep comes back partial or refused**, don't retry it harder and
+don't fill the gaps. Take what the search already surfaced — many threads carry
+a usable subject in the result snippet without opening anything — and leave the
+rest as participant-and-count rows. Then say which is which: "15 threads with
+subjects, ~20 recorded as counts only". A report that is explicit about its own
+partial coverage is more useful than one that hides it, and far more useful than
+one padded with inferred topics. Offer the user the option of naming the
+threads that mattered; they know instantly what took a week to guess at.
+
+### Collaboration section
+
+For ranges longer than a few days, add one table after the daily sections and
+**before** the Summary, collecting the work that left no PR or ticket — incident
+triage, unblocking a colleague, onboarding, decisions made in a thread. These
+are scattered one row per day in the chronology, where their weight is invisible;
+gathered up, they're often a third of the range.
+
+```markdown
+## Collaboration not captured by PRs or tickets
+
+| Dates | With | Subject |
+|---|---|---|
+| 08-06 → 08-07 | Matthew Wollenweber, Raf Borges | Lambda RCA — EventBridge invoke permission and KMS grant (11 msgs) |
+| 08-09, 08-12 | Malki Morad | Onboarding — TFE Dev/Prod IaC workflow (13 msgs) |
+```
+
+Merge the multi-day threads: one row per subject with the dates it spanned,
+not one row per day. Say underneath how it was built — subjects already
+resolved in the daily tables, versus threads opened specifically for this — and
+how many rows remain counts-only.
+
+### Summary
 
 ```markdown
 ## Summary
 
+Range: 2026-08-17..2026-08-18 · Sources: GitHub, GitLab, Jira, Slack
+
 | Metric | Count |
-|--------|-------|
-| GitHub PRs created | N |
-| GitHub PRs merged (own) | N |
-| GitHub PRs merged (others' - as merger) | N |
-| GitHub PRs reviewed/approved | N |
-| GitLab MRs created | N |
-| GitLab MRs merged (own) | N |
-| GitLab MRs merged (others' - as merger) | N |
-| GitLab MRs reviewed/approved | N |
-| Jira tickets created | N |
-| Jira tickets resolved | N |
-| Jira tickets status changed | N |
+|---|---|
+| GitHub PRs created / merged / reviewed | N / N / N |
+| GitHub PRs merged for others | N |
+| GitLab MRs created / merged / approved | N / N / N |
+| Jira tickets created / resolved / transitioned | N / N / N |
+| Slack threads participated | N |
+| Slack threads with subject resolved / counts only | N / N |
 
 | Category | Items |
-|----------|-------|
-| GitHub repositories touched | repo1, repo2 |
-| GitLab projects touched | group/repo1, group/repo2 |
-| Jira projects touched | PROJ1, PROJ2 |
+|---|---|
+| GitHub repositories | repo1, repo2 |
+| GitLab projects | group/repo1 |
+| Jira projects | PROJ1, PROJ2 |
+| Slack channels | #chan1, #chan2 |
 ```
 
-## Workflow
+### Coverage note
 
-1. **Collect parameters** - username(s), email, date range, platforms
-2. **Detect platforms** - check `gh auth status` and `glab auth status`
-3. **Derive Jira email** (if not provided) - fetch profile from GitHub then GitLab, construct both email formats
-4. **Validate Jira email** - run validation query with format 1, if empty try format 2
-5. **Fallback if needed** - extract Jira ticket key from PR/MR titles, fetch ticket, discover actual Jira name
-6. **Run GitHub searches in parallel** (if GitHub active) - all 4 search commands
-7. **Run GitLab searches in parallel** (if GitLab active) - all 3 search commands
-8. **Run Jira searches in parallel** - all 4 JQL queries
-9. **Get review timestamps** - fetch actual review/approval times via API for both platforms
-10. **Check merge attribution** - check `merged_by` for both GitHub and GitLab
-11. **Deduplicate results** - same PR/MR/ticket may appear in multiple searches
-12. **Filter by date** - review timestamps may fall outside update date; filter to requested range
-13. **Sort chronologically** - by actual action timestamp
-14. **Format output** - use daily summary template
-15. **Add statistics** - summary counts at the end
+Close with what was left out and why. Keep two reasons distinct, because they
+mean opposite things to the reader:
 
-## Common Pitfalls
+- **Not requested** — the user scoped the report. Nothing is missing.
+- **Unavailable** — the source could not be reached. Data *is* missing, and the
+  reader may want to fix the auth and re-run.
 
-| Issue | Solution |
-| ----- | -------- |
-| Wrong year in dates | Verify current year before searching |
-| Missing merged GitHub PRs | Use `--merged-at` not `--merged` flag |
-| Missing GitHub reviews on specific days | Fetch timestamps via `gh api repos/.../pulls/N/reviews` |
-| GitHub reviews showing wrong date | `gh search` uses PR update time - must use API for exact times |
-| Missing "merged by" activity (GitHub) | Check `merged_by` via `gh api repos/.../pulls/N` |
-| Missing "merged by" activity (GitLab) | Check `merged_by` via `glab api projects/ID/merge_requests/IID` |
-| GitLab `glab mr list` missing results | Use `glab api merge_requests` with date filters instead |
-| GitLab pagination missing results | Always use `--paginate` with `glab api` |
-| GitLab approval timestamps unavailable | Use MR `updated_at` as proxy; note it in output |
-| Jira DURING clause errors | End date must be +1 day |
-| Incomplete Jira results | Run multiple JQL queries to cover all activity types |
-| Jira email not found | Profile name order may be reversed - try both `first.last@` and `last.first@` |
-| GitHub and Jira names completely different | Extract Jira ticket key from PR/MR titles, fetch ticket, use reporter/assignee display_name |
+```markdown
+**Coverage:** GitLab only, as requested — GitHub, Jira, and Slack not queried.
+Times in UTC.
+```
+
+```markdown
+**Coverage:** GitHub, Jira, Slack. GitLab unavailable (glab not authenticated) —
+any MRs are missing from this report. Slack bounded sweep (4 searches × 2
+pages); #busy-channel had further results. Times in UTC (Slack converted from
+IDT).
+```
+
+This is the difference between a report someone can trust and one that quietly
+overstates its own completeness. A reader who knows GitLab was unavailable can
+go look; a reader who doesn't will conclude there were no MRs.
+
+## Step 4: Save the report
+
+Always write the finished report to `~/work-activity-reports/`, named for the
+resolved range:
+
+- Single day: `YYYY-MM-DD.md`
+- Range: `YYYY-MM-DD_to_YYYY-MM-DD.md`
+
+Create the directory if it doesn't exist. Write the file even when the user only
+asked to see the report — these accumulate into a work log that is far more
+useful than any single invocation, and re-running a wide range is slow and
+burns a lot of API calls. Tell the user the path.
+
+If a file for that exact range already exists, say so and ask before
+overwriting. A previous run may have had better source coverage than this one.
+
+Derivative artifacts belong in the same directory, suffixed after the range:
+`YYYY-MM-DD_to_YYYY-MM-DD_zendesk-tickets.md`.
+
+## Step 5: Offer a Slack draft
+
+The report is a record; a Slack message is what actually gets read by a manager
+or a standup channel. After saving, offer to draft one — and when the user asks
+for the message directly, skip the offer and write it.
+
+Draft it, never send it. Use `slack_send_message_draft`, which saves to the
+user's Drafts and lets them edit before sending. Sending someone's
+self-assessment to their manager without them reading it first is not a
+recoverable mistake.
+
+**Draft into the user's own DM channel** — the self-DM, not a team channel and
+not the manager's DM. That gives them a private place to edit and reword before
+forwarding it themselves. Resolve it from the identity established in preflight:
+pass their own user ID as `channel_id`, or use the self-DM channel ID if the
+user supplies one. Only draft elsewhere if the user names a destination
+explicitly in this invocation.
+
+**Restructure, don't paste.** The report is chronological because that's how it
+was verified; the message is thematic because that's how it's read. Group the
+work into 4-6 themes — production incidents, platform hardening, the steady
+support load, review load — and lead with impact rather than ticket order.
+Within each theme, say what broke or what was needed and what changed as a
+result. A manager wants "restored S3 write permissions a prior PR had silently
+dropped, masked by `continue-on-error`", not "merged PR #6361".
+
+Open with the headline counts (PRs opened/merged/reviewed, tickets
+opened/resolved) so the volume is visible before the detail.
+
+**Include the work that only exists in Slack.** Incident triage, unblocking a
+colleague, onboarding someone, an architecture call made in a thread — none of
+it leaves a PR or a ticket behind, so it vanishes from every other record the
+user has. It is often a third of the week. Pull it from the DM and channel rows
+and give it a theme of its own, or fold each item into whichever theme it
+belongs to.
+
+Describe it by outcome: "unblocked Data team's Databricks/WARP connectivity",
+"walked a new hire through the TFE Dev/Prod IaC workflow", "diagnosed the
+EventBridge invoke permission with SecOps over three days". Naming the colleague
+is fine and usually useful. Quoting them is not — the same subject-not-content
+rule as the report. Leave `(personal)` rows out entirely.
+
+**Each item belongs to exactly one theme.** Onboarding a colleague is either
+collaboration or review load, not both; a ticket that came from Zendesk sits
+under the support load, not also under platform work. Repetition reads as
+padding and makes the message longer than the attention it will get. When an
+item genuinely spans two themes, put it where its outcome landed and let the
+other theme reference it in passing.
+
+Where a ticket had an upstream source, name it — `ZD #70575 → INF-3696` shows
+the request arriving and being closed out, which a bare ticket key does not.
+
+### Slack formatting
+
+Slack's message API is not markdown, and getting this wrong produces visible
+junk in the user's draft:
+
+| Want | Write | Not |
+| --- | --- | --- |
+| Bold | `*bold*` | `**bold**` |
+| Link | `<https://url\|INF-1234>` | `[INF-1234](https://url)` |
+| Bullet | `•` literal | `-` |
+| Ampersand | `&` typed directly | `&amp;` |
+
+The ampersand is the one that bites. HTML entities pass through the API
+undecoded and render literally as `&#38;` in the draft — a section header
+reading `Access &#38; identity` is the giveaway. Avoid `&`, `<`, and `>` outside
+of link syntax; write "and" instead.
+
+Make every ticket reference clickable. `<https://org.atlassian.net/browse/INF-3701|INF-3701>`
+for Jira; do the same for Zendesk, PRs, and MRs. A bare `INF-3701` forces the
+reader to go look it up, and at that point they won't.
+
+Only one attached draft is allowed per channel. If one already exists, the API
+returns `draft_already_exists` — ask the user to delete it, since the existing
+draft may be theirs and unsent.
+
+## Pitfalls
+
+| Issue | Cause and fix |
+| --- | --- |
+| Wrong year in results | Verify the current year before searching |
+| GitHub merges missing | Use `--merged-at`, not `--merged` |
+| GitHub `mergedAt` field error | Not valid in search JSON — use `closedAt` |
+| GitHub reviews on wrong day | `gh search` matches PR update time; fetch real times via `gh api .../reviews` |
+| "Merged by" work missing | Author searches never find it; check `merged_by` |
+| GitLab commands erroring on `--jq` | `glab api` has no `--jq` — pipe to external `jq` |
+| GitLab reviews all empty | `reviewer_username` returns `[]` silently — use `users/:id/events` |
+| GitLab results truncated | `--paginate` is required |
+| Jira transition times wrong | `changelog` is `null`; report date-only |
+| Jira email guessing fails | Use `currentUser()` for self; look the user up rather than munging names |
+| Slack rows hours off | Results are workspace-local, not UTC — convert |
+| Slack range includes stray dates | `after:`/`before:` are exclusive — widen, then filter |
+| Report looks empty but isn't | An unauthenticated source was skipped without saying so |
+| Slack permalinks 404 | A subagent constructed them from channel names — copy verbatim or omit |
+| A colleague's merge credited to the user | `merged_by` not checked before emitting a Merged row |
+| Private DM appears as channel activity | Row misattributed; the search result label is the source of truth |
+| Whole channels missing from Slack | Sweep stopped at page 1 with a cursor outstanding while reporting no truncation |
+| `&#38;` visible in the Slack draft | An HTML entity was sent; the API doesn't decode it — type `&` directly |
+| Slack links render as raw markdown | Slack uses `<url\|text>`, not `[text](url)` |
+| `draft_already_exists` error | One attached draft per channel — the user must delete the old one first |
+| Report gone after the session ends | Step 4 was skipped; always write to `~/work-activity-reports/` |
+| Slack agent refuses the DM sweep | Ownership context missing from its prompt — state that these are the user's own DMs in their own session |
+| Second pass needed for Zendesk refs | Jira agent fetched summaries only; ask for descriptions on the first pass |
+| Same item in two themes of the message | Assign each to one theme; cross-reference instead of repeating |
+| Collaboration work invisible in a long report | It's one row per day in the chronology — gather it into its own table before the Summary |
